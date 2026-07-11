@@ -15,7 +15,10 @@ export async function getCurrentUser(): Promise<User | null> {
     error: authError,
   } = await supabase.auth.getUser()
 
-  if (authError || !authUser) return null
+  if (authError || !authUser) {
+    if (authError) console.error("[getCurrentUser] auth.getUser() error:", authError.message)
+    return null
+  }
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
@@ -23,12 +26,24 @@ export async function getCurrentUser(): Promise<User | null> {
     .eq("id", authUser.id)
     .single()
 
-  if (profileError || !profile) return null
+  if (profileError || !profile) {
+    console.error(
+      "[getCurrentUser] users profile lookup failed for auth id",
+      authUser.id,
+      "-",
+      profileError?.message ?? "sin datos",
+      profileError?.details ?? "",
+    )
+    return null
+  }
 
   // roles(...) viene embebido por la FK users.role_id -> roles.id. Supabase
   // lo tipa como array aunque acá siempre es 0 o 1 fila (relación many-to-one).
   const role = Array.isArray(profile.roles) ? profile.roles[0] : profile.roles
-  if (!role) return null
+  if (!role) {
+    console.error("[getCurrentUser] usuario sin rol embebido, role_id:", profile.role_id)
+    return null
+  }
 
   const [{ data: permissionRows }, { count: scopedLocationCount }, { data: locationRows }] =
     await Promise.all([
