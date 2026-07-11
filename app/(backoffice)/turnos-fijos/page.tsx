@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import {
   getClients,
   getCurrentUser,
@@ -10,6 +11,7 @@ import { RecurringView } from "@/components/recurring/recurring-view"
 
 export default async function TurnosFijosPage() {
   const user = await getCurrentUser()
+  if (!user) redirect("/login")
   const locations = await getLocationsForUser(user)
   const locationIds = locations.map((l) => l.id)
 

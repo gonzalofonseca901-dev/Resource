@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import { getAnalyticsMetrics, getCurrentUser } from "@/lib/data"
 import { can, PERMISSIONS } from "@/lib/permissions"
 import { OccupancyChart } from "@/components/analytics/occupancy-chart"
@@ -7,6 +8,7 @@ import { RevenuePanel } from "@/components/analytics/revenue-panel"
 
 export default async function AnalyticsPage() {
   const user = await getCurrentUser()
+  if (!user) redirect("/login")
   const metrics = await getAnalyticsMetrics(user)
 
   // Revenue is always computed by the data layer, but only forwarded to the UI

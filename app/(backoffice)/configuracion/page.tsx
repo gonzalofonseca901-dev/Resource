@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import {
   getBusiness,
   getCurrentUser,
@@ -16,6 +17,7 @@ import { AppearanceSettings } from "@/components/settings/appearance-settings"
 
 export default async function ConfiguracionPage() {
   const user = await getCurrentUser()
+  if (!user) redirect("/login")
 
   const [business, modules, locations, users, roles] = await Promise.all([
     getBusiness(),

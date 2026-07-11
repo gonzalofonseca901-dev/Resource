@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import {
   getBookingsByDateRange,
   getCurrentUser,
@@ -9,6 +10,7 @@ import { AgendaView } from "@/components/agenda/agenda-view"
 
 export default async function AgendaPage() {
   const user = await getCurrentUser()
+  if (!user) redirect("/login")
   const locations = await getLocationsForUser(user)
   const locationIds = locations.map((l) => l.id)
 

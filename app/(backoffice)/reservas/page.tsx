@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import {
   getBookings,
   getClients,
@@ -10,6 +11,7 @@ import { BookingsView } from "@/components/bookings/bookings-view"
 
 export default async function ReservasPage() {
   const user = await getCurrentUser()
+  if (!user) redirect("/login")
   const locations = await getLocationsForUser(user)
   const locationIds = locations.map((l) => l.id)
 

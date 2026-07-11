@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import { getCurrentUser, getDashboardMetrics, getLocationsForUser } from "@/lib/data"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { MetricsRow } from "@/components/dashboard/metrics-row"
@@ -6,6 +7,7 @@ import { AlertsPanel } from "@/components/dashboard/alerts-panel"
 
 export default async function DashboardPage() {
   const user = await getCurrentUser()
+  if (!user) redirect("/login")
   const [metrics, locations] = await Promise.all([
     getDashboardMetrics(user),
     getLocationsForUser(user),

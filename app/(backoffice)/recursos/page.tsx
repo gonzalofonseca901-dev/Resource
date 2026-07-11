@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import {
   getCurrentUser,
   getLocationsForUser,
@@ -12,6 +13,7 @@ import { ResourcesView } from "@/components/resources/resources-view"
 
 export default async function RecursosPage() {
   const user = await getCurrentUser()
+  if (!user) redirect("/login")
   const locations = await getLocationsForUser(user)
   const locationIds = locations.map((l) => l.id)
 

@@ -1,6 +1,8 @@
 // Internal staff / roles domain types.
 
-export type RoleKey = "owner" | "staff"
+// Roles son customizables por negocio (ver migración 003) — no un enum fijo.
+// "owner" y "staff" son las seed keys, pero cualquier negocio puede tener más.
+export type RoleKey = string
 
 export interface Role {
   id: string
