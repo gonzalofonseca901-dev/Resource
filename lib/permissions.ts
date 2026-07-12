@@ -67,9 +67,13 @@ export const STAFF_PERMISSIONS: PermissionKey[] = [
   PERMISSIONS.BOOKING_CREATE,
   PERMISSIONS.BOOKING_UPDATE,
   PERMISSIONS.BOOKING_CANCEL,
+  PERMISSIONS.RECURRING_MANAGE,
   PERMISSIONS.CLIENT_VIEW,
   PERMISSIONS.CLIENT_MANAGE,
   PERMISSIONS.REPORT_VIEW,
+  // payments.view / pos.operate existen en el catálogo real (003) pero no
+  // hay pantalla en el frontend todavía que los use — no se agregan acá
+  // hasta que haya un módulo de pagos/POS real.
 ]
 
 /**

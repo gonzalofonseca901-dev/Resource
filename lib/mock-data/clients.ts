@@ -34,7 +34,7 @@ export const MOCK_END_CLIENTS: EndClient[] = [
     phone: "+54 9 11 5123-4004",
     email: "caro.mendez@outlook.com",
     loyaltyPoints: 540,
-    preferredChannel: "email",
+    preferredChannel: "web",
   },
   {
     id: "client-5",

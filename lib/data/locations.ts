@@ -1,18 +1,58 @@
-// Location fetchers. Scoping to a user's accessible locations is enforced here
-// (mirrors a RLS policy / `.in('id', user.locationIds)` filter on Supabase).
+// Location fetchers, implementación real. RLS ya filtra por business_id — acá
+// solo agregamos el scoping de sede por usuario (locationIds vacío = todas).
 
 import type { Location, User } from "@/lib/types"
 import { canAccessLocation } from "@/lib/permissions"
-import { MOCK_LOCATIONS } from "@/lib/mock-data"
+import { createClient } from "@/lib/supabase/server"
+
+function mapLocation(row: {
+  id: string
+  business_id: string
+  name: string
+  address: string | null
+  city: string | null
+  phone: string | null
+  whatsapp_number: string | null
+  timezone: string
+  is_active: boolean
+}): Location {
+  return {
+    id: row.id,
+    businessId: row.business_id,
+    name: row.name,
+    address: row.address ?? "",
+    city: row.city ?? "",
+    phone: row.phone ?? "",
+    whatsappNumber: row.whatsapp_number ?? "",
+    timezone: row.timezone,
+    isActive: row.is_active,
+  }
+}
 
 /** All active locations for the business. */
 export async function getLocations(): Promise<Location[]> {
-  return MOCK_LOCATIONS.filter((location) => location.isActive)
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("locations")
+    .select("*")
+    .eq("is_active", true)
+    .order("name")
+
+  if (error) throw new Error(`No se pudieron cargar las sedes: ${error.message}`)
+  return (data ?? []).map(mapLocation)
 }
 
 /** A single location by id, or null. */
 export async function getLocationById(locationId: string): Promise<Location | null> {
-  return MOCK_LOCATIONS.find((location) => location.id === locationId) ?? null
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("locations")
+    .select("*")
+    .eq("id", locationId)
+    .maybeSingle()
+
+  if (error) throw new Error(`No se pudo cargar la sede: ${error.message}`)
+  return data ? mapLocation(data) : null
 }
 
 /**

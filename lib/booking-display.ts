@@ -39,7 +39,7 @@ export const PAYMENT_META: Record<PaymentStatus, string> = {
 
 export const CHANNEL_META: Record<PreferredChannel, string> = {
   whatsapp: "WhatsApp",
-  email: "Email",
+  web: "Web",
   phone: "Teléfono",
 }
 

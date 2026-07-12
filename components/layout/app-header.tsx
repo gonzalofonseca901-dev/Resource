@@ -1,18 +1,20 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   BarChart3,
   CalendarDays,
   LayoutDashboard,
   LayoutGrid,
   ListChecks,
+  LogOut,
   Repeat,
   Settings,
   Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
 
 interface AppHeaderProps {
   userName: string
@@ -33,6 +35,14 @@ const NAV_ITEMS = [
 
 export function AppHeader({ userName, roleName, businessName }: AppHeaderProps) {
   const pathname = usePathname()
+  const router = useRouter()
+
+  async function handleSignOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push("/login")
+    router.refresh()
+  }
 
   const initials = userName
     .split(" ")
@@ -85,6 +95,15 @@ export function AppHeader({ userName, roleName, businessName }: AppHeaderProps) 
           >
             {initials}
           </span>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            aria-label="Cerrar sesión"
+            title="Cerrar sesión"
+          >
+            <LogOut className="size-4" aria-hidden="true" />
+          </button>
         </div>
       </div>
     </header>

@@ -3,11 +3,10 @@ import {
   getCurrentUser,
   getLocationsForUser,
   getManagedResourcesByLocations,
-  getPricingByResource,
-  getScheduleBlocksByResource,
-  getSchedulesByResource,
+  getPricingByResources,
+  getScheduleBlocksByResources,
+  getSchedulesByResources,
 } from "@/lib/data"
-import type { ResourcePricing, Schedule, ScheduleBlock } from "@/lib/types"
 import { can, PERMISSIONS } from "@/lib/permissions"
 import { ResourcesView } from "@/components/resources/resources-view"
 
@@ -19,23 +18,14 @@ export default async function RecursosPage() {
 
   const resources = await getManagedResourcesByLocations(locationIds)
 
-  // Pre-fetch schedules, pricing and blocks for every resource so the client
-  // view can switch between resources without further round-trips. With a real
-  // backend this becomes a single select with nested relations.
-  const [schedulesList, pricingList, blocksList] = await Promise.all([
-    Promise.all(resources.map((r) => getSchedulesByResource(r.id))),
-    Promise.all(resources.map((r) => getPricingByResource(r.id))),
-    Promise.all(resources.map((r) => getScheduleBlocksByResource(r.id))),
-  ])
+  const resourceIds = resources.map((r) => r.id)
 
-  const schedulesByResource: Record<string, Schedule[]> = {}
-  const pricingByResource: Record<string, ResourcePricing[]> = {}
-  const blocksByResource: Record<string, ScheduleBlock[]> = {}
-  resources.forEach((r, i) => {
-    schedulesByResource[r.id] = schedulesList[i]
-    pricingByResource[r.id] = pricingList[i]
-    blocksByResource[r.id] = blocksList[i]
-  })
+  // 3 queries batched en total (una por tipo), en vez de 3 por recurso.
+  const [schedulesByResource, pricingByResource, blocksByResource] = await Promise.all([
+    getSchedulesByResources(resourceIds),
+    getPricingByResources(resourceIds),
+    getScheduleBlocksByResources(resourceIds),
+  ])
 
   const permissions = {
     canView: can(user, PERMISSIONS.RESOURCE_VIEW),

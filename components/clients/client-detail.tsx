@@ -1,6 +1,6 @@
 "use client"
 
-import { Phone, Mail, MessageCircle, Star, UserRound, CalendarClock, MapPin } from "lucide-react"
+import { Phone, Mail, Globe, MessageCircle, Star, UserRound, CalendarClock, MapPin } from "lucide-react"
 import type { EnrichedBooking } from "@/lib/data"
 import type { EndClient } from "@/lib/types"
 import { formatCurrency, formatDateShort, formatTimeRange } from "@/lib/date-utils"
@@ -163,7 +163,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 function channelIcon(channel: EndClient["preferredChannel"]) {
   const className = "size-3.5"
   if (channel === "whatsapp") return <MessageCircle className={className} aria-hidden="true" />
-  if (channel === "email") return <Mail className={className} aria-hidden="true" />
+  if (channel === "web") return <Globe className={className} aria-hidden="true" />
   return <Phone className={className} aria-hidden="true" />
 }
 

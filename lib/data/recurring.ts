@@ -1,24 +1,60 @@
-// Recurring-series fetchers. Returns EnrichedRecurringBooking (series + joined
-// client/resource/location), matching a Supabase select with nested relations.
-// The location is resolved through the series' resource.
+// Recurring-series fetchers, implementación real. `resource_id` tiene FK real
+// a `resources`, así que la location se embebe anidada a través del recurso
+// (resource:resources(*, location:locations(*))) — recurring_bookings.location_id
+// existe denormalizado (002) pero sin FK explícita, así que no se puede embeber
+// directo; para FILTRAR sí sirve una columna plana sin FK.
 
-import type { RecurringBooking } from "@/lib/types"
-import {
-  MOCK_END_CLIENTS,
-  MOCK_LOCATIONS,
-  MOCK_RECURRING_BOOKINGS,
-  MOCK_RESOURCES,
-} from "@/lib/mock-data"
+import { createClient } from "@/lib/supabase/server"
 import type { EnrichedRecurringBooking } from "./types"
 
-/** Join a raw series with its client, resource and (resource-derived) location. */
-function enrich(series: RecurringBooking): EnrichedRecurringBooking | null {
-  const client = MOCK_END_CLIENTS.find((c) => c.id === series.endClientId)
-  const resource = MOCK_RESOURCES.find((r) => r.id === series.resourceId)
-  if (!client || !resource) return null
-  const location = MOCK_LOCATIONS.find((l) => l.id === resource.locationId)
-  if (!location) return null
-  return { ...series, client, resource, location }
+const SELECT = "*, client:end_clients(*), resource:resources(*, location:locations(*))"
+
+// biome-ignore lint: shape viene directo de PostgREST, se mapea explícito abajo
+function mapRow(row: any): EnrichedRecurringBooking | null {
+  if (!row.client || !row.resource || !row.resource.location) return null
+
+  return {
+    id: row.id,
+    resourceId: row.resource_id,
+    endClientId: row.end_client_id,
+    dayOfWeek: row.day_of_week,
+    startTime: row.start_time.slice(0, 5),
+    endTime: row.end_time.slice(0, 5),
+    validFrom: row.valid_from,
+    validUntil: row.valid_until ?? undefined,
+    status: row.status,
+    price: Number(row.price ?? 0),
+    client: {
+      id: row.client.id,
+      businessId: row.client.business_id,
+      fullName: row.client.full_name,
+      phone: row.client.phone,
+      email: row.client.email ?? undefined,
+      loyaltyPoints: row.client.loyalty_points,
+      preferredChannel: row.client.preferred_channel,
+    },
+    resource: {
+      id: row.resource.id,
+      locationId: row.resource.location_id,
+      businessId: row.resource.business_id,
+      name: row.resource.name,
+      type: row.resource.type ?? "other",
+      description: row.resource.description ?? "",
+      capacity: row.resource.capacity,
+      isActive: row.resource.is_active,
+    },
+    location: {
+      id: row.resource.location.id,
+      businessId: row.resource.location.business_id,
+      name: row.resource.location.name,
+      address: row.resource.location.address ?? "",
+      city: row.resource.location.city ?? "",
+      phone: row.resource.location.phone ?? "",
+      whatsappNumber: row.resource.location.whatsapp_number ?? "",
+      timezone: row.resource.location.timezone,
+      isActive: row.resource.location.is_active,
+    },
+  }
 }
 
 /**
@@ -28,12 +64,16 @@ function enrich(series: RecurringBooking): EnrichedRecurringBooking | null {
 export async function getRecurringBookings(
   locationIds: string[],
 ): Promise<EnrichedRecurringBooking[]> {
-  const allowed = new Set(locationIds)
-  return MOCK_RECURRING_BOOKINGS.map(enrich)
-    .filter((s): s is EnrichedRecurringBooking => s !== null)
-    .filter((s) => allowed.has(s.location.id))
-    .sort((a, b) => {
-      if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek
-      return a.startTime.localeCompare(b.startTime)
-    })
+  if (locationIds.length === 0) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("recurring_bookings")
+    .select(SELECT)
+    .in("location_id", locationIds)
+    .order("day_of_week")
+    .order("start_time")
+
+  if (error) throw new Error(`No se pudieron cargar los turnos fijos: ${error.message}`)
+  return (data ?? []).map(mapRow).filter((s): s is EnrichedRecurringBooking => s !== null)
 }

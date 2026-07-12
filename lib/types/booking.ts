@@ -2,7 +2,7 @@
 
 import type { Currency, DayOfWeek } from "./business"
 
-export type PreferredChannel = "whatsapp" | "email" | "phone"
+export type PreferredChannel = "whatsapp" | "web" | "phone"
 
 export interface EndClient {
   id: string

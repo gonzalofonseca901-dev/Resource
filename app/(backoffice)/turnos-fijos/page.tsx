@@ -22,8 +22,8 @@ export default async function TurnosFijosPage() {
   ])
 
   const permissions = {
-    canCreate: can(user, PERMISSIONS.BOOKING_CREATE),
-    canCancel: can(user, PERMISSIONS.BOOKING_CANCEL),
+    canCreate: can(user, PERMISSIONS.RECURRING_MANAGE),
+    canCancel: can(user, PERMISSIONS.RECURRING_MANAGE),
   }
 
   return (

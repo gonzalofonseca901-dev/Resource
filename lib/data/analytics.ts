@@ -3,9 +3,10 @@
 // aggregate queries / a materialized view over bookings.
 
 import type { DayOfWeek, User } from "@/lib/types"
+import { addDays, startOfDay } from "@/lib/date-utils"
 import { getLocationsForUser } from "./locations"
 import { getManagedResourcesByLocations } from "./resources"
-import { getBookings } from "./bookings"
+import { getBookingsByDateRange } from "./bookings"
 import type {
   AnalyticsMetrics,
   AnalyticsPairPoint,
@@ -40,17 +41,25 @@ export async function getAnalyticsMetrics(user: User): Promise<AnalyticsMetrics>
   const locations = await getLocationsForUser(user)
   const locationIds = locations.map((l) => l.id)
 
+  // BUG FIX: antes esto traía TODAS las reservas del negocio sin límite de
+  // fecha (`getBookings`), mientras el label decía "Últimas 2 semanas" — con
+  // datos mock estáticos nunca se notaba, pero con datos reales creciendo el
+  // dato quedaba mal apenas hubiera más de 14 días de historial. Ahora sí se
+  // escopea de verdad, y el denominador de ocupación (activeResources * 8
+  // slots/día * 14 días) queda consistente con el numerador.
+  const DAYS_IN_PERIOD = 14
+  const periodEnd = addDays(startOfDay(new Date()), 1)
+  const periodStart = addDays(periodEnd, -DAYS_IN_PERIOD)
+
   const [resources, bookings] = await Promise.all([
     getManagedResourcesByLocations(locationIds),
-    getBookings(locationIds),
+    getBookingsByDateRange(locationIds, periodStart, periodEnd),
   ])
 
   const activeResources = resources.filter((r) => r.isActive)
 
   // --- Occupancy -----------------------------------------------------------
-  // Modelled capacity: each active resource offers ~8 sellable slots/day, so a
-  // rolling 14-day window gives a realistic denominator against mock volume.
-  const DAYS_IN_PERIOD = 14
+  // Modelled capacity: each active resource offers ~8 sellable slots/day.
   const SLOTS_PER_DAY = 8
   const availableSlots = activeResources.length * SLOTS_PER_DAY * DAYS_IN_PERIOD
 
