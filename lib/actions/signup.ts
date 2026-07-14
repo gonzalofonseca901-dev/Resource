@@ -37,6 +37,21 @@ type SignupResult =
   | { ok: false; error: string }
 
 export async function signupAction(input: SignupInput): Promise<SignupResult> {
+  // LOG TEMPORAL DE DIAGNÓSTICO — sacar una vez resuelto. JSON.stringify
+  // revela caracteres invisibles (\n, espacios) que un console.log normal
+  // no muestra. Si el valor tiene el nombre de la key pegado adentro
+  // (ej. "NEXT_PUBLIC_SUPABASE_URL=https://...") o un \n al final, se ve acá.
+  console.error(
+    "DEBUG env vars:",
+    JSON.stringify({
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      urlLength: process.env.NEXT_PUBLIC_SUPABASE_URL?.length,
+      anonKeyLength: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length,
+      anonKeyFirst10: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.slice(0, 10),
+      anonKeyLast10: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.slice(-10),
+    }),
+  )
+
   const supabase = await createClient()
 
   const { error: signUpError } = await supabase.auth.signUp({
