@@ -20,6 +20,7 @@ interface ResourceDetailProps {
   permissions: ResourcesPermissions
   onEdit: () => void
   onToggleActive: () => void
+  disabled?: boolean
 }
 
 export function ResourceDetail({
@@ -31,6 +32,7 @@ export function ResourceDetail({
   permissions,
   onEdit,
   onToggleActive,
+  disabled = false,
 }: ResourceDetailProps) {
   const [tab, setTab] = useState("general")
 
@@ -71,11 +73,11 @@ export function ResourceDetail({
         </div>
         {permissions.canManage && (
           <div className="flex shrink-0 items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onToggleActive}>
+            <Button variant="outline" size="sm" onClick={onToggleActive} disabled={disabled}>
               <Power className="size-3.5" aria-hidden="true" />
               {resource.isActive ? "Desactivar" : "Activar"}
             </Button>
-            <Button variant="outline" size="sm" onClick={onEdit}>
+            <Button variant="outline" size="sm" onClick={onEdit} disabled={disabled}>
               <Pencil className="size-3.5" aria-hidden="true" />
               Editar
             </Button>

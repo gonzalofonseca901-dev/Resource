@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { MapPin, Pencil, Plus } from "lucide-react"
 import type { Location } from "@/lib/types"
-import { tempId } from "@/lib/utils"
+import { saveLocationAction } from "@/lib/actions/locations"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -51,32 +52,34 @@ interface LocationsManagerProps {
   canManage: boolean
 }
 
-export function LocationsManager({ businessId, locations: initial, canManage }: LocationsManagerProps) {
-  const [locations, setLocations] = useState<Location[]>(initial)
+export function LocationsManager({ locations, canManage }: LocationsManagerProps) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [draft, setDraft] = useState<LocationDraft | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const isValid = draft != null && draft.name.trim() !== "" && draft.city.trim() !== ""
 
   function save() {
     if (!draft || !isValid) return
-    setLocations((prev) => {
-      if (draft.id) {
-        return prev.map((l) => (l.id === draft.id ? { ...l, ...draft, id: draft.id! } : l))
-      }
-      const created: Location = {
-        id: tempId("loc"),
-        businessId,
+    setError(null)
+    startTransition(async () => {
+      const result = await saveLocationAction({
+        id: draft.id,
         name: draft.name.trim(),
         address: draft.address.trim(),
         city: draft.city.trim(),
         phone: draft.phone.trim(),
         whatsappNumber: draft.whatsappNumber.trim(),
-        timezone: "America/Argentina/Buenos_Aires",
         isActive: draft.isActive,
+      })
+      if (!result.ok) {
+        setError(result.error)
+        return
       }
-      return [...prev, created]
+      setDraft(null)
+      router.refresh()
     })
-    setDraft(null)
   }
 
   return (
@@ -95,7 +98,12 @@ export function LocationsManager({ businessId, locations: initial, canManage }: 
           </Button>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-3">
+        {error && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
         <ul className="flex flex-col gap-2">
           {locations.map((location) => (
             <li
@@ -138,6 +146,7 @@ export function LocationsManager({ businessId, locations: initial, canManage }: 
         onClose={() => setDraft(null)}
         onSave={save}
         canSave={isValid}
+        submitting={isPending}
       />
     </Card>
   )
@@ -149,9 +158,10 @@ interface LocationDialogProps {
   onClose: () => void
   onSave: () => void
   canSave: boolean
+  submitting: boolean
 }
 
-function LocationDialog({ draft, onChange, onClose, onSave, canSave }: LocationDialogProps) {
+function LocationDialog({ draft, onChange, onClose, onSave, canSave, submitting }: LocationDialogProps) {
   // Keep a stable local copy so inputs stay controlled while the modal is open.
   const [local, setLocal] = useState<LocationDraft>(draft ?? emptyDraft())
   useEffect(() => {
@@ -172,11 +182,11 @@ function LocationDialog({ draft, onChange, onClose, onSave, canSave }: LocationD
       description="Datos de contacto y ubicación de la sucursal."
       footer={
         <>
-          <Button variant="outline" size="lg" onClick={onClose}>
+          <Button variant="outline" size="lg" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button size="lg" onClick={onSave} disabled={!canSave}>
-            {draft?.id ? "Guardar" : "Crear sede"}
+          <Button size="lg" onClick={onSave} disabled={!canSave || submitting}>
+            {submitting ? "Guardando..." : draft?.id ? "Guardar" : "Crear sede"}
           </Button>
         </>
       }

@@ -57,7 +57,11 @@ export default async function ConfiguracionPage() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <AppearanceSettings settings={business.settings} canManage={canManageSettings} />
+          <AppearanceSettings
+            businessId={business.id}
+            settings={business.settings}
+            canManage={canManageSettings}
+          />
           {canManageModules && (
             <ModulesPanel modules={modules} enabledKeys={business.modulesEnabled} />
           )}

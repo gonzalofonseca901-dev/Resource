@@ -1,11 +1,13 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Pencil, Plus, Trash2 } from "lucide-react"
 import type { Currency, DayOfWeek, PricingRuleType, ResourcePricing } from "@/lib/types"
 import { PRICING_RULE_META } from "@/lib/resource-display"
 import { formatCurrency, formatDayOfWeek } from "@/lib/date-utils"
 import { tempId } from "@/lib/utils"
+import { upsertPricingRuleAction, deletePricingRuleAction } from "@/lib/actions/resources"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -93,11 +95,13 @@ interface ResourcePricingEditorProps {
 
 export function ResourcePricingEditor({
   resourceId,
-  pricing: initial,
+  pricing: rules,
   canManage,
 }: ResourcePricingEditorProps) {
-  const [rules, setRules] = useState<ResourcePricing[]>(initial)
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [draft, setDraft] = useState<PricingDraft | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Highest priority first — this is the order the engine evaluates rules in.
   const sorted = useMemo(
@@ -110,10 +114,12 @@ export function ResourcePricingEditor({
   }
 
   function startCreate() {
+    setError(null)
     setDraft(newDraft())
   }
 
   function startEdit(rule: ResourcePricing) {
+    setError(null)
     setDraft(toDraft(rule))
   }
 
@@ -141,19 +147,38 @@ export function ResourcePricingEditor({
       toTime: draft.ruleType === "time_range" ? draft.toTime : undefined,
       specificDate: draft.ruleType === "specific_date" ? draft.specificDate : undefined,
     }
-    setRules((prev) => {
-      const exists = prev.some((r) => r.id === rule.id)
-      return exists ? prev.map((r) => (r.id === rule.id ? rule : r)) : [...prev, rule]
+    setError(null)
+    startTransition(async () => {
+      const result = await upsertPricingRuleAction(resourceId, rule)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setDraft(null)
+      router.refresh()
     })
-    setDraft(null)
   }
 
   function remove(id: string) {
-    setRules((prev) => prev.filter((r) => r.id !== id))
+    setError(null)
+    startTransition(async () => {
+      const result = await deletePricingRuleAction(id)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      router.refresh()
+    })
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h3 className="text-sm font-medium">Precios variables</h3>
@@ -163,7 +188,7 @@ export function ResourcePricingEditor({
           </p>
         </div>
         {canManage && !draft && (
-          <Button variant="outline" size="sm" onClick={startCreate}>
+          <Button variant="outline" size="sm" onClick={startCreate} disabled={isPending}>
             <Plus className="size-3.5" aria-hidden="true" />
             Nueva regla
           </Button>
@@ -284,11 +309,11 @@ export function ResourcePricingEditor({
           </div>
 
           <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => setDraft(null)}>
+            <Button variant="outline" size="sm" onClick={() => setDraft(null)} disabled={isPending}>
               Cancelar
             </Button>
-            <Button size="sm" onClick={save} disabled={!isValid}>
-              {draft.id ? "Guardar regla" : "Agregar regla"}
+            <Button size="sm" onClick={save} disabled={!isValid || isPending}>
+              {isPending ? "Guardando..." : draft.id ? "Guardar regla" : "Agregar regla"}
             </Button>
           </div>
         </div>
@@ -325,6 +350,7 @@ export function ResourcePricingEditor({
                       size="icon"
                       aria-label={`Editar regla ${PRICING_RULE_META[rule.ruleType].label}`}
                       onClick={() => startEdit(rule)}
+                      disabled={isPending}
                     >
                       <Pencil className="size-4" aria-hidden="true" />
                     </Button>
@@ -333,6 +359,7 @@ export function ResourcePricingEditor({
                       size="icon"
                       aria-label={`Eliminar regla ${PRICING_RULE_META[rule.ruleType].label}`}
                       onClick={() => remove(rule.id)}
+                      disabled={isPending}
                     >
                       <Trash2 className="size-4" aria-hidden="true" />
                     </Button>

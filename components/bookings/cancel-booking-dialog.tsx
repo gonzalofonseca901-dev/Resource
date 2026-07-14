@@ -9,12 +9,14 @@ interface CancelBookingDialogProps {
   booking: EnrichedBooking | null
   onClose: () => void
   onConfirm: () => void
+  submitting?: boolean
 }
 
 export function CancelBookingDialog({
   booking,
   onClose,
   onConfirm,
+  submitting = false,
 }: CancelBookingDialogProps) {
   return (
     <Modal
@@ -24,11 +26,11 @@ export function CancelBookingDialog({
       description="Esta acción marca la reserva como cancelada y libera el turno."
       footer={
         <>
-          <Button variant="outline" size="lg" onClick={onClose}>
+          <Button variant="outline" size="lg" onClick={onClose} disabled={submitting}>
             Volver
           </Button>
-          <Button variant="destructive" size="lg" onClick={onConfirm}>
-            Cancelar reserva
+          <Button variant="destructive" size="lg" onClick={onConfirm} disabled={submitting}>
+            {submitting ? "Cancelando..." : "Cancelar reserva"}
           </Button>
         </>
       }

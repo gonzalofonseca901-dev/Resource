@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import type {
   Location,
@@ -9,7 +10,11 @@ import type {
   Schedule,
   ScheduleBlock,
 } from "@/lib/types"
-import { tempId } from "@/lib/utils"
+import {
+  createResourceAction,
+  updateResourceAction,
+  toggleResourceActiveAction,
+} from "@/lib/actions/resources"
 import { Button } from "@/components/ui/button"
 import { ResourceList } from "./resource-list"
 import { ResourceDetail } from "./resource-detail"
@@ -32,17 +37,19 @@ interface ResourcesViewProps {
 }
 
 export function ResourcesView({
-  resources: initialResources,
+  resources,
   locations,
   schedulesByResource,
   pricingByResource,
   blocksByResource,
   permissions,
 }: ResourcesViewProps) {
-  const [resources, setResources] = useState<Resource[]>(initialResources)
-  const [selectedId, setSelectedId] = useState<string | null>(initialResources[0]?.id ?? null)
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [selectedId, setSelectedId] = useState<string | null>(resources[0]?.id ?? null)
   const [editing, setEditing] = useState<Resource | null>(null)
   const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const showLocation = locations.length > 1
 
@@ -52,21 +59,31 @@ export function ResourcesView({
   )
 
   function handleSubmit(draft: ResourceDraft) {
-    if (draft.id) {
-      setResources((prev) => prev.map((r) => (r.id === draft.id ? { ...r, ...draft } : r)))
-    } else {
-      const created: Resource = { ...draft, id: tempId("res") }
-      setResources((prev) => [...prev, created])
-      setSelectedId(created.id)
-    }
-    setCreating(false)
-    setEditing(null)
+    setError(null)
+    startTransition(async () => {
+      const result = draft.id
+        ? await updateResourceAction({ ...draft, id: draft.id })
+        : await createResourceAction(draft)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setCreating(false)
+      setEditing(null)
+      router.refresh()
+    })
   }
 
   function handleToggleActive(resource: Resource) {
-    setResources((prev) =>
-      prev.map((r) => (r.id === resource.id ? { ...r, isActive: !r.isActive } : r)),
-    )
+    setError(null)
+    startTransition(async () => {
+      const result = await toggleResourceActiveAction(resource.id, !resource.isActive)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      router.refresh()
+    })
   }
 
   if (!permissions.canView) {
@@ -79,6 +96,12 @@ export function ResourcesView({
 
   return (
     <div className="flex flex-col gap-4">
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
       {permissions.canManage && (
         <div className="flex justify-end">
           <Button size="lg" onClick={() => setCreating(true)}>
@@ -105,6 +128,7 @@ export function ResourcesView({
           permissions={permissions}
           onEdit={() => selected && setEditing(selected)}
           onToggleActive={() => selected && handleToggleActive(selected)}
+          disabled={isPending}
         />
       </div>
 
@@ -117,6 +141,7 @@ export function ResourcesView({
           setEditing(null)
         }}
         onSubmit={handleSubmit}
+        submitting={isPending}
       />
     </div>
   )

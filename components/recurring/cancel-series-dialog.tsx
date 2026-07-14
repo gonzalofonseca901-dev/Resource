@@ -19,12 +19,14 @@ interface CancelSeriesDialogProps {
   series: EnrichedRecurringBooking | null
   onClose: () => void
   onConfirm: (result: SeriesCancellation) => void
+  submitting?: boolean
 }
 
 export function CancelSeriesDialog({
   series,
   onClose,
   onConfirm,
+  submitting = false,
 }: CancelSeriesDialogProps) {
   const [scope, setScope] = useState<Scope>("series")
   const [date, setDate] = useState("")
@@ -72,16 +74,16 @@ export function CancelSeriesDialog({
       }
       footer={
         <>
-          <Button variant="outline" size="lg" onClick={onClose}>
+          <Button variant="outline" size="lg" onClick={onClose} disabled={submitting}>
             Volver
           </Button>
           <Button
             variant="destructive"
             size="lg"
             onClick={handleConfirm}
-            disabled={!isValid}
+            disabled={!isValid || submitting}
           >
-            Confirmar baja
+            {submitting ? "Confirmando..." : "Confirmar baja"}
           </Button>
         </>
       }

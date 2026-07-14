@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import type { CancellationPolicy } from "@/lib/types"
+import { updateCancellationPolicyAction } from "@/lib/actions/business"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -15,11 +17,34 @@ interface CancellationPolicyFormProps {
 }
 
 export function CancellationPolicyForm({ policy, canManage }: CancellationPolicyFormProps) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [minHours, setMinHours] = useState(policy.minHoursBeforeStart)
   // Stored as a fraction (0–1); shown to the user as a percentage.
   const [feePercent, setFeePercent] = useState(Math.round(policy.lateCancellationFeePercent * 100))
   const [chargeNoShow, setChargeNoShow] = useState(policy.chargeNoShow)
   const [note, setNote] = useState(policy.policyNote)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  function handleSave() {
+    setError(null)
+    setSaved(false)
+    startTransition(async () => {
+      const result = await updateCancellationPolicyAction({
+        minHoursBeforeStart: minHours,
+        lateCancellationFeePercent: feePercent / 100,
+        chargeNoShow,
+        policyNote: note,
+      })
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setSaved(true)
+      router.refresh()
+    })
+  }
 
   return (
     <Card>
@@ -30,6 +55,12 @@ export function CancellationPolicyForm({ policy, canManage }: CancellationPolicy
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        {error && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="policy-hours">Horas mínimas para cancelar sin cargo</Label>
@@ -88,8 +119,13 @@ export function CancellationPolicyForm({ policy, canManage }: CancellationPolicy
         </div>
 
         {canManage && (
-          <div className="flex justify-end">
-            <Button size="lg">Guardar política</Button>
+          <div className="flex items-center justify-end gap-3">
+            {saved && !isPending && (
+              <span className="text-xs text-muted-foreground">Guardado.</span>
+            )}
+            <Button size="lg" onClick={handleSave} disabled={isPending}>
+              {isPending ? "Guardando..." : "Guardar política"}
+            </Button>
           </div>
         )}
       </CardContent>

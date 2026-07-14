@@ -1,12 +1,14 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Check, ImageIcon, Upload } from "lucide-react"
 import type { BusinessSettings, BusinessTheme } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
+import { updateAppearanceAction } from "@/lib/actions/business"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
 const THEME_OPTIONS: { key: BusinessTheme; label: string; hint: string }[] = [
@@ -19,22 +21,67 @@ const THEME_OPTIONS: { key: BusinessTheme; label: string; hint: string }[] = [
 const ACCENT_PRESETS = ["#147D7A", "#0F766E", "#2563EB", "#DB2777", "#D97706", "#4F46E5"]
 
 interface AppearanceSettingsProps {
+  businessId: string
   settings: BusinessSettings
   canManage: boolean
 }
 
-export function AppearanceSettings({ settings, canManage }: AppearanceSettingsProps) {
-  // Local draft matches business.settings exactly (theme / accentColor / logoUrl),
-  // which is what the future public landing will read.
+export function AppearanceSettings({ businessId, settings, canManage }: AppearanceSettingsProps) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [uploading, setUploading] = useState(false)
   const [theme, setTheme] = useState<BusinessTheme>(settings.theme)
   const [accentColor, setAccentColor] = useState(settings.accentColor)
   const [logoUrl, setLogoUrl] = useState<string | undefined>(settings.logoUrl)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  function onLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (file) setLogoUrl(URL.createObjectURL(file))
+    if (!file) return
+
+    setError(null)
+    setUploading(true)
+
+    const supabase = createClient()
+    const ext = file.name.split(".").pop() ?? "png"
+    // Path fijo (no random) a propósito: pisar el logo anterior en vez de
+    // acumular archivos huérfanos en el bucket cada vez que se cambia.
+    const path = `${businessId}/logo.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from("business-assets")
+      .upload(path, file, { upsert: true })
+
+    setUploading(false)
+
+    if (uploadError) {
+      setError(`No se pudo subir el logo: ${uploadError.message}`)
+      return
+    }
+
+    const { data } = supabase.storage.from("business-assets").getPublicUrl(path)
+    // Cache-bust: el nombre de archivo es siempre el mismo (upsert), así que
+    // sin esto el navegador podría seguir mostrando el logo viejo cacheado.
+    setLogoUrl(`${data.publicUrl}?t=${Date.now()}`)
   }
+
+  function handleSave() {
+    setError(null)
+    setSaved(false)
+    startTransition(async () => {
+      const result = await updateAppearanceAction({ theme, accentColor, logoUrl })
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setSaved(true)
+      router.refresh()
+    })
+  }
+
+  const busy = isPending || uploading
 
   return (
     <Card>
@@ -45,6 +92,12 @@ export function AppearanceSettings({ settings, canManage }: AppearanceSettingsPr
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
+        {error && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
         <fieldset className="flex flex-col gap-2" disabled={!canManage}>
           <legend className="mb-1 text-xs font-medium text-foreground">Tema</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -132,9 +185,14 @@ export function AppearanceSettings({ settings, canManage }: AppearanceSettingsPr
                   className="sr-only"
                   onChange={onLogoChange}
                 />
-                <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                >
                   <Upload className="size-3.5" aria-hidden="true" />
-                  Subir logo
+                  {uploading ? "Subiendo..." : "Subir logo"}
                 </Button>
                 {logoUrl && (
                   <Button variant="ghost" size="sm" onClick={() => setLogoUrl(undefined)}>
@@ -148,8 +206,11 @@ export function AppearanceSettings({ settings, canManage }: AppearanceSettingsPr
         </div>
 
         {canManage && (
-          <div className="flex justify-end">
-            <Button size="lg">Guardar apariencia</Button>
+          <div className="flex items-center justify-end gap-3">
+            {saved && !busy && <span className="text-xs text-muted-foreground">Guardado.</span>}
+            <Button size="lg" onClick={handleSave} disabled={busy}>
+              {isPending ? "Guardando..." : "Guardar apariencia"}
+            </Button>
           </div>
         )}
       </CardContent>

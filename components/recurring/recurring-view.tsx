@@ -1,9 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import type { EndClient, Location, Resource } from "@/lib/types"
 import type { EnrichedRecurringBooking } from "@/lib/data"
+import {
+  createRecurringSeriesAction,
+  cancelRecurringSeriesAction,
+  cancelRecurringOccurrenceAction,
+} from "@/lib/actions/recurring"
 import { Button } from "@/components/ui/button"
 import { RecurringTable } from "./recurring-table"
 import { RecurringFormDialog, type RecurringDraft } from "./recurring-form-dialog"
@@ -20,60 +26,63 @@ interface RecurringViewProps {
   resources: Resource[]
   clients: EndClient[]
   permissions: RecurringPermissions
+  initialExceptions: Record<string, string[]>
 }
 
 export function RecurringView({
-  series: initialSeries,
+  series,
   locations,
   resources,
   clients,
   permissions,
+  initialExceptions,
 }: RecurringViewProps) {
-  const [series, setSeries] = useState<EnrichedRecurringBooking[]>(initialSeries)
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [creating, setCreating] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<EnrichedRecurringBooking | null>(null)
-  // Dates (per series id) cancelled as one-off exceptions.
-  const [exceptions, setExceptions] = useState<Record<string, string[]>>({})
+  const [error, setError] = useState<string | null>(null)
 
   const showLocation = locations.length > 1
 
-  function enrich(draft: RecurringDraft): EnrichedRecurringBooking | null {
-    const client = clients.find((c) => c.id === draft.endClientId)
-    const resource = resources.find((r) => r.id === draft.resourceId)
-    const location = locations.find((l) => l.id === resource?.locationId)
-    if (!client || !resource || !location) return null
-    return { ...draft, client, resource, location }
-  }
-
   function handleCreate(draft: RecurringDraft) {
-    const enriched = enrich(draft)
-    if (!enriched) return
-    setSeries((prev) =>
-      [enriched, ...prev].sort((a, b) => {
-        if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek
-        return a.startTime.localeCompare(b.startTime)
-      }),
-    )
-    setCreating(false)
+    setError(null)
+    startTransition(async () => {
+      const result = await createRecurringSeriesAction(draft)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setCreating(false)
+      router.refresh()
+    })
   }
 
   function handleCancel(result: SeriesCancellation) {
-    if (result.scope === "series") {
-      setSeries((prev) =>
-        prev.map((s) => (s.id === result.seriesId ? { ...s, status: "cancelled" } : s)),
-      )
-    } else {
-      setExceptions((prev) => {
-        const current = prev[result.seriesId] ?? []
-        if (current.includes(result.date)) return prev
-        return { ...prev, [result.seriesId]: [...current, result.date] }
-      })
-    }
-    setCancelTarget(null)
+    setError(null)
+    startTransition(async () => {
+      const actionResult =
+        result.scope === "series"
+          ? await cancelRecurringSeriesAction(result.seriesId)
+          : await cancelRecurringOccurrenceAction(result.seriesId, result.date)
+
+      if (!actionResult.ok) {
+        setError(actionResult.error)
+        return
+      }
+      setCancelTarget(null)
+      router.refresh()
+    })
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
       {permissions.canCreate && (
         <div className="flex justify-end">
           <Button size="lg" onClick={() => setCreating(true)}>
@@ -85,7 +94,7 @@ export function RecurringView({
 
       <RecurringTable
         series={series}
-        exceptions={exceptions}
+        exceptions={initialExceptions}
         showLocation={showLocation}
         canCancel={permissions.canCancel}
         onCancel={(s) => setCancelTarget(s)}
@@ -98,12 +107,14 @@ export function RecurringView({
         locations={locations}
         onClose={() => setCreating(false)}
         onSubmit={handleCreate}
+        submitting={isPending}
       />
 
       <CancelSeriesDialog
         series={cancelTarget}
         onClose={() => setCancelTarget(null)}
         onConfirm={handleCancel}
+        submitting={isPending}
       />
     </div>
   )

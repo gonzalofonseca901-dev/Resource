@@ -57,6 +57,7 @@ interface RecurringFormDialogProps {
   locations: Location[]
   onClose: () => void
   onSubmit: (draft: RecurringDraft) => void
+  submitting?: boolean
 }
 
 export function RecurringFormDialog({
@@ -66,6 +67,7 @@ export function RecurringFormDialog({
   locations,
   onClose,
   onSubmit,
+  submitting = false,
 }: RecurringFormDialogProps) {
   const [form, setForm] = useState<FormState>(() => initialState(resources))
 
@@ -111,11 +113,11 @@ export function RecurringFormDialog({
       description="Se repite todas las semanas en el día y horario elegidos."
       footer={
         <>
-          <Button variant="outline" size="lg" onClick={onClose}>
+          <Button variant="outline" size="lg" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button size="lg" onClick={handleSubmit} disabled={!isValid}>
-            Crear serie
+          <Button size="lg" onClick={handleSubmit} disabled={!isValid || submitting}>
+            {submitting ? "Creando..." : "Crear serie"}
           </Button>
         </>
       }

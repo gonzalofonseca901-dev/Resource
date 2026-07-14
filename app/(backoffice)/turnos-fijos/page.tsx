@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import {
   getClients,
   getCurrentUser,
+  getExceptionsBySeries,
   getLocationsForUser,
   getRecurringBookings,
   getResourcesByLocations,
@@ -20,6 +21,8 @@ export default async function TurnosFijosPage() {
     getResourcesByLocations(locationIds),
     getClients(user.businessId),
   ])
+
+  const exceptions = await getExceptionsBySeries(series.map((s) => s.id))
 
   const permissions = {
     canCreate: can(user, PERMISSIONS.RECURRING_MANAGE),
@@ -42,6 +45,7 @@ export default async function TurnosFijosPage() {
         resources={resources}
         clients={clients}
         permissions={permissions}
+        initialExceptions={exceptions}
       />
     </div>
   )

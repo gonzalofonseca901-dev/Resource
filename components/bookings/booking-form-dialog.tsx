@@ -83,6 +83,7 @@ interface BookingFormDialogProps {
   locations: Location[]
   onClose: () => void
   onSubmit: (draft: BookingDraft) => void
+  submitting?: boolean
 }
 
 export function BookingFormDialog({
@@ -93,6 +94,7 @@ export function BookingFormDialog({
   locations,
   onClose,
   onSubmit,
+  submitting = false,
 }: BookingFormDialogProps) {
   const isEdit = booking !== null
   const [form, setForm] = useState<FormState>(() => initialState(booking, resources))
@@ -143,11 +145,11 @@ export function BookingFormDialog({
       }
       footer={
         <>
-          <Button variant="outline" size="lg" onClick={onClose}>
+          <Button variant="outline" size="lg" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button size="lg" onClick={handleSubmit} disabled={!isValid}>
-            {isEdit ? "Guardar cambios" : "Crear reserva"}
+          <Button size="lg" onClick={handleSubmit} disabled={!isValid || submitting}>
+            {submitting ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear reserva"}
           </Button>
         </>
       }

@@ -58,6 +58,32 @@ function mapRow(row: any): EnrichedRecurringBooking | null {
 }
 
 /**
+ * Fechas canceladas puntualmente (excepciones tipo 'cancelled') por serie,
+ * para pintar esas ocurrencias como dadas de baja en la tabla.
+ */
+export async function getExceptionsBySeries(
+  seriesIds: string[],
+): Promise<Record<string, string[]>> {
+  if (seriesIds.length === 0) return {}
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("booking_exceptions")
+    .select("recurring_booking_id, exception_date")
+    .in("recurring_booking_id", seriesIds)
+    .eq("type", "cancelled")
+
+  if (error) throw new Error(`No se pudieron cargar las excepciones: ${error.message}`)
+
+  const byseries: Record<string, string[]> = {}
+  for (const id of seriesIds) byseries[id] = []
+  for (const e of data ?? []) {
+    byseries[e.recurring_booking_id]?.push(e.exception_date)
+  }
+  return byseries
+}
+
+/**
  * Enriched recurring series for the given locations, ordered by day of week
  * then start time so the table reads like a weekly plan.
  */

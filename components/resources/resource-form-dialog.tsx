@@ -43,6 +43,7 @@ interface ResourceFormDialogProps {
   locations: Location[]
   onClose: () => void
   onSubmit: (draft: ResourceDraft) => void
+  submitting?: boolean
 }
 
 export function ResourceFormDialog({
@@ -51,6 +52,7 @@ export function ResourceFormDialog({
   locations,
   onClose,
   onSubmit,
+  submitting = false,
 }: ResourceFormDialogProps) {
   const [form, setForm] = useState<FormState>(() => initialState(resource, locations))
 
@@ -89,11 +91,11 @@ export function ResourceFormDialog({
       description="Datos básicos del recurso. Los horarios y precios se configuran en su ficha."
       footer={
         <>
-          <Button variant="outline" size="lg" onClick={onClose}>
+          <Button variant="outline" size="lg" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button size="lg" onClick={handleSubmit} disabled={!isValid}>
-            {resource ? "Guardar cambios" : "Crear recurso"}
+          <Button size="lg" onClick={handleSubmit} disabled={!isValid || submitting}>
+            {submitting ? "Guardando..." : resource ? "Guardar cambios" : "Crear recurso"}
           </Button>
         </>
       }

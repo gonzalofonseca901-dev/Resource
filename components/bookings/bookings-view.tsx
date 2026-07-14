@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import type { EndClient, Location, Resource } from "@/lib/types"
 import type { EnrichedBooking } from "@/lib/data"
@@ -10,6 +11,7 @@ import {
   hasActiveBookingFilters,
   type BookingFilters,
 } from "@/lib/booking-filters"
+import { createBookingAction, updateBookingAction, cancelBookingAction } from "@/lib/actions/bookings"
 import { Button } from "@/components/ui/button"
 import { BookingsFilters } from "./bookings-filters"
 import { BookingsTable } from "./bookings-table"
@@ -31,14 +33,16 @@ interface BookingsViewProps {
 }
 
 export function BookingsView({
-  bookings: initialBookings,
+  bookings,
   locations,
   resources,
   clients,
   permissions,
 }: BookingsViewProps) {
-  const [bookings, setBookings] = useState<EnrichedBooking[]>(initialBookings)
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [filters, setFilters] = useState<BookingFilters>(EMPTY_BOOKING_FILTERS)
+  const [error, setError] = useState<string | null>(null)
 
   // null = closed, "new" = create, otherwise the booking being edited.
   const [formTarget, setFormTarget] = useState<EnrichedBooking | "new" | null>(null)
@@ -50,45 +54,46 @@ export function BookingsView({
   )
 
   const showLocation = locations.length > 1
-
-  /** Rebuild an enriched booking from a raw draft using the loaded lookups. */
-  function enrich(draft: BookingDraft): EnrichedBooking | null {
-    const client = clients.find((c) => c.id === draft.endClientId)
-    const resource = resources.find((r) => r.id === draft.resourceId)
-    const location = locations.find((l) => l.id === resource?.locationId)
-    if (!client || !resource || !location) return null
-    return { ...draft, locationId: location.id, client, resource, location }
-  }
+  const isEditing = formTarget !== "new" && formTarget !== null
 
   function handleSubmit(draft: BookingDraft) {
-    const enriched = enrich(draft)
-    if (!enriched) return
-    setBookings((prev) => {
-      const exists = prev.some((b) => b.id === enriched.id)
-      const next = exists
-        ? prev.map((b) => (b.id === enriched.id ? enriched : b))
-        : [enriched, ...prev]
-      return next.sort(
-        (a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime(),
-      )
+    setError(null)
+    startTransition(async () => {
+      const result = isEditing
+        ? await updateBookingAction(draft)
+        : await createBookingAction(draft)
+
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setFormTarget(null)
+      router.refresh()
     })
-    setFormTarget(null)
   }
 
   function handleConfirmCancel() {
     if (!cancelTarget) return
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.id === cancelTarget.id
-          ? { ...b, status: "cancelled", paymentStatus: "cancelled" }
-          : b,
-      ),
-    )
-    setCancelTarget(null)
+    setError(null)
+    startTransition(async () => {
+      const result = await cancelBookingAction(cancelTarget.id)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setCancelTarget(null)
+      router.refresh()
+    })
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <BookingsFilters
           locations={locations}
@@ -123,12 +128,14 @@ export function BookingsView({
         locations={locations}
         onClose={() => setFormTarget(null)}
         onSubmit={handleSubmit}
+        submitting={isPending}
       />
 
       <CancelBookingDialog
         booking={cancelTarget}
         onClose={() => setCancelTarget(null)}
         onConfirm={handleConfirmCancel}
+        submitting={isPending}
       />
     </div>
   )
