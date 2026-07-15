@@ -24,6 +24,13 @@ interface InviteUserPayload {
   fullName: string
   roleId: string
   locationIds?: string[]
+  // Sprint 6, Parte C: cuando quien invita es agency admin y quiere invitar
+  // a un negocio que NO es el suyo (ej. dar de alta al primer staff de un
+  // negocio nuevo desde el panel de agencia). Se valida más abajo que el
+  // caller efectivamente sea agency admin antes de honrarlo — si no lo es,
+  // se ignora y se usa el business_id propio del caller (mismo comportamiento
+  // que antes de este campo existir).
+  targetBusinessId?: string
 }
 
 Deno.serve(async (req: Request) => {
@@ -70,7 +77,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: callerProfile, error: callerProfileError } = await callerClient
     .from("users")
-    .select("business_id")
+    .select("business_id, is_agency_admin")
     .eq("id", callerAuthUser.id)
     .single()
 
@@ -78,7 +85,15 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "No se pudo resolver el negocio del usuario que invita." }, 500)
   }
 
-  const businessId = callerProfile.business_id
+  // Solo se honra targetBusinessId si el caller es agency admin — para
+  // cualquier otro caller (el caso normal, un owner invitando a SU propio
+  // staff) se ignora el campo y se usa su propio business_id, así que un
+  // payload con targetBusinessId ajeno mandado por alguien que no es agency
+  // admin no tiene ningún efecto.
+  const businessId =
+    callerProfile.is_agency_admin && payload.targetBusinessId
+      ? payload.targetBusinessId
+      : callerProfile.business_id
 
   // 2. Cliente con service_role — recién acá, para las escrituras que RLS no
   // permitiría a un usuario normal (crear auth.users, insertar en public.users
@@ -152,7 +167,7 @@ Deno.serve(async (req: Request) => {
     await adminClient.from("user_location_access").insert(rows)
   }
 
-  return jsonResponse({ ok: true, userId: inviteData.user.id })
+  return jsonResponse({ ok: true, userId: inviteData.user.id }, 200)
 })
 
 function jsonResponse(body: unknown, status: number) {

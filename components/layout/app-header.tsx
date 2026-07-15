@@ -5,12 +5,14 @@ import { usePathname, useRouter } from "next/navigation"
 import {
   BarChart3,
   CalendarDays,
+  CreditCard,
   LayoutDashboard,
   LayoutGrid,
   ListChecks,
   LogOut,
   Repeat,
   Settings,
+  ShieldCheck,
   Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -20,6 +22,7 @@ interface AppHeaderProps {
   userName: string
   roleName: string
   businessName: string
+  isAgencyAdmin?: boolean
 }
 
 const NAV_ITEMS = [
@@ -30,10 +33,11 @@ const NAV_ITEMS = [
   { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/recursos", label: "Recursos", icon: LayoutGrid },
   { href: "/analytics", label: "Analítica", icon: BarChart3 },
+  { href: "/facturacion", label: "Facturación", icon: CreditCard },
   { href: "/configuracion", label: "Configuración", icon: Settings },
 ]
 
-export function AppHeader({ userName, roleName, businessName }: AppHeaderProps) {
+export function AppHeader({ userName, roleName, businessName, isAgencyAdmin }: AppHeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -85,6 +89,15 @@ export function AppHeader({ userName, roleName, businessName }: AppHeaderProps) 
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
+          {isAgencyAdmin && (
+            <Link
+              href="/negocios"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <ShieldCheck className="size-3.5" aria-hidden="true" />
+              Panel de agencia
+            </Link>
+          )}
           <div className="hidden text-right leading-tight sm:block">
             <p className="text-sm font-medium">{userName}</p>
             <p className="text-xs text-muted-foreground">{roleName}</p>

@@ -29,6 +29,7 @@ export const MOCK_USERS: User[] = [
     email: "andres@padelnorte.com.ar",
     role: OWNER_ROLE,
     locationIds: [], // empty = all locations
+    isAgencyAdmin: false,
   },
   {
     id: "user-staff-centro",
@@ -37,6 +38,7 @@ export const MOCK_USERS: User[] = [
     email: "romina@padelnorte.com.ar",
     role: STAFF_ROLE,
     locationIds: ["loc-centro"],
+    isAgencyAdmin: false,
   },
   {
     id: "user-staff-costanera",
@@ -45,6 +47,7 @@ export const MOCK_USERS: User[] = [
     email: "nicolas@padelnorte.com.ar",
     role: STAFF_ROLE,
     locationIds: ["loc-costanera"],
+    isAgencyAdmin: false,
   },
 ]
 

@@ -46,7 +46,7 @@ export async function getUsers(businessId: string): Promise<User[]> {
   ] = await Promise.all([
     supabase
       .from("users")
-      .select("id, business_id, full_name, email, role_id, roles(id, key, name)")
+      .select("id, business_id, full_name, email, role_id, is_agency_admin, roles(id, key, name)")
       .eq("business_id", businessId),
     getRoles(businessId),
     supabase
@@ -79,6 +79,7 @@ export async function getUsers(businessId: string): Promise<User[]> {
         email: u.email,
         role,
         locationIds: locationsByUser.get(u.id) ?? [],
+        isAgencyAdmin: u.is_agency_admin ?? false,
       }
     })
     .filter((u): u is User => u !== null)

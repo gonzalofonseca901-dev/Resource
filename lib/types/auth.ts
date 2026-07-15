@@ -21,4 +21,8 @@ export interface User {
   role: Role
   // Location ids this user can access. Empty array = access to all locations.
   locationIds: string[]
+  // Panel de agencia (Sprint 6) — public.users.is_agency_admin. No es un
+  // permission del catálogo de `permissions` (003): es un flag aparte,
+  // ortogonal al RBAC por negocio, que habilita el route group app/(admin).
+  isAgencyAdmin: boolean
 }
