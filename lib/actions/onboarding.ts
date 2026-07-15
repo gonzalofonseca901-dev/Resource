@@ -63,6 +63,7 @@ export async function completeOnboardingAction(input: OnboardingInput): Promise<
   const { data: location, error: locationError } = await supabase
     .from("locations")
     .insert({
+      business_id: user.businessId,
       name: input.location.name,
       address: input.location.address || null,
       city: input.location.city || null,
