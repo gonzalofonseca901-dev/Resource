@@ -64,15 +64,10 @@ export async function GET(request: Request) {
     .single()
 
   if (provisionError) {
-    // LOG TEMPORAL DE DIAGNÓSTICO — captura el error real server-side,
-    // independientemente de si esta request la disparó un humano clickeando
-    // o el escáner de links de Gmail/Outlook consumiendo el token solo.
-    console.error(
-      "[confirm] provision_business falló para user",
-      verifyData.user.id,
-      "meta:", JSON.stringify(meta),
-      "error:", JSON.stringify(provisionError, Object.getOwnPropertyNames(provisionError)),
-    )
+    // Log liviano para observabilidad en producción — sin el dump de meta/
+    // error completo que usamos mientras diagnosticábamos el bug de la
+    // plantilla de mail. Suficiente para detectar si vuelve a pasar.
+    console.error("[confirm] provision_business falló para user", verifyData.user.id, "-", provisionError.message)
     // "ya tiene un negocio asociado" = el usuario reclickeó un link viejo
     // después de haber confirmado antes (provisioning idempotente, ver
     // 010_provision_business.sql) — no es un error real, lo mandamos adentro.

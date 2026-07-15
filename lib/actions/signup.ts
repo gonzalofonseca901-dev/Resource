@@ -37,21 +37,6 @@ type SignupResult =
   | { ok: false; error: string }
 
 export async function signupAction(input: SignupInput): Promise<SignupResult> {
-  // LOG TEMPORAL DE DIAGNÓSTICO — sacar una vez resuelto. JSON.stringify
-  // revela caracteres invisibles (\n, espacios) que un console.log normal
-  // no muestra. Si el valor tiene el nombre de la key pegado adentro
-  // (ej. "NEXT_PUBLIC_SUPABASE_URL=https://...") o un \n al final, se ve acá.
-  console.error(
-    "DEBUG env vars:",
-    JSON.stringify({
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-      urlLength: process.env.NEXT_PUBLIC_SUPABASE_URL?.length,
-      anonKeyLength: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length,
-      anonKeyFirst10: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.slice(0, 10),
-      anonKeyLast10: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.slice(-10),
-    }),
-  )
-
   const supabase = await createClient()
 
   const { error: signUpError } = await supabase.auth.signUp({
@@ -79,22 +64,10 @@ export async function signupAction(input: SignupInput): Promise<SignupResult> {
   })
 
   if (signUpError) {
-    // LOG TEMPORAL DE DIAGNÓSTICO — sacar una vez resuelto el problema real.
-    // signUpError.message venía vacío/"{}" en el cliente; esto vuelca TODO
-    // lo que tenga el objeto (incluidas propiedades no-enumerables como
-    // message/stack, que un JSON.stringify normal se come) directo a los
-    // logs de Vercel (Deployments > tu deploy > Logs / Runtime Logs).
-    console.error(
-      "signUpError completo:",
-      JSON.stringify(signUpError, Object.getOwnPropertyNames(signUpError)),
-    )
-    console.error("signUpError name/status/code:", {
-      name: (signUpError as any).name,
-      status: (signUpError as any).status,
-      code: (signUpError as any).code,
-      cause: (signUpError as any).cause,
-    })
-    return { ok: false, error: `No se pudo crear la cuenta: ${signUpError.message || "(sin mensaje, ver logs del server)"}` }
+    // Log liviano para observabilidad en producción (no el dump completo
+    // que usamos mientras diagnosticábamos el AuthRetryableFetchError).
+    console.error("[signupAction] signUp falló:", signUpError.name, signUpError.status, signUpError.message)
+    return { ok: false, error: `No se pudo crear la cuenta: ${signUpError.message || "Error desconocido, ver logs del server."}` }
   }
 
   return { ok: true, needsEmailConfirmation: true }
