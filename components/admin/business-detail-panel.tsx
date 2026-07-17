@@ -68,16 +68,33 @@ export function BusinessDetailPanel({ business, plans, moduleCatalog }: Business
   function handleImpersonate(userId: string) {
     setImpersonateError(null)
     setImpersonatingUserId(userId)
+
+    // Abrir la pestaña ACÁ, síncrono, como resultado directo del click —
+    // no después del await del Server Action. Si se abre recién cuando
+    // llega la respuesta, el navegador ya no lo considera un popup
+    // "pedido por el usuario" y lo bloquea en silencio (sin tirar error,
+    // por eso no se notaba nada raro: la pestaña simplemente no aparecía y
+    // quedabas viendo tu propia sesión). Se abre en blanco y se redirige
+    // recién cuando tenemos el link real.
+    const supportTab = window.open("", "_blank", "noopener,noreferrer")
+    if (!supportTab) {
+      setImpersonatingUserId(null)
+      setImpersonateError(
+        "El navegador bloqueó la pestaña nueva. Permití pop-ups para este sitio (ícono en la barra de direcciones) e intentá de nuevo.",
+      )
+      return
+    }
+    supportTab.document.write("Generando acceso de soporte...")
+
     startTransition(async () => {
       const result = await startImpersonationAction(userId, business.id, "Soporte desde el panel de agencia.")
       setImpersonatingUserId(null)
       if (!result.ok) {
         setImpersonateError(result.error)
+        supportTab.close()
         return
       }
-      // Pestaña nueva a propósito — no pisa la sesión de admin en esta
-      // pestaña. Ver comentario en components/admin/impersonation-banner.tsx.
-      window.open(result.data.actionLink, "_blank", "noopener,noreferrer")
+      supportTab.location.href = result.data.actionLink
     })
   }
 
