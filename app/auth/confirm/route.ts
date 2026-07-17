@@ -39,6 +39,19 @@ export async function GET(request: Request) {
     )
   }
 
+  // Solo el link de confirmación de cuenta (type=signup) tiene que disparar
+  // provision_business() — cualquier otro tipo verificado acá (ej.
+  // `magiclink`, usado por la impersonación de soporte del panel de
+  // agencia, ver lib/actions/admin.ts) ya tiene sesión válida después del
+  // verifyOtp de arriba y solo necesita redirigir. Sin este chequeo, un
+  // link de impersonación terminaba intentando crear un negocio para el
+  // usuario de soporte (inofensivo si ya tenía uno por el guard de abajo,
+  // pero conceptualmente esta ruta no debería tocar provisioning para nada
+  // que no sea un signup real).
+  if (type !== "signup") {
+    return NextResponse.redirect(`${origin}${next}`)
+  }
+
   // Datos del negocio guardados en el signUp() original (lib/actions/signup.ts).
   const meta = verifyData.user.user_metadata as {
     full_name?: string

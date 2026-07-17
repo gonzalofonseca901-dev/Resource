@@ -176,7 +176,23 @@ export async function startImpersonationAction(
       return { ok: false, error: `No se pudo generar el acceso: ${linkError?.message ?? "sin detalle"}` }
     }
 
-    return { ok: true, data: { actionLink: linkData.properties.action_link } }
+    // MISMO bug/fix que ya está documentado en Sprint 5 para el mail de
+    // confirmación de cuenta: `linkData.properties.action_link` apunta al
+    // endpoint hosteado de Supabase (`*.supabase.co/auth/v1/verify`), que
+    // confirma el token del lado de Supabase pero no deja la cookie de
+    // sesión bien puesta en NUESTRO dominio (la app usa @supabase/ssr,
+    // que maneja cookies propias) — el resultado real, encontrado
+    // validando esto en vivo, es que el link te termina mandando a
+    // `/login` en vez de dejarte adentro. El fix es el mismo de siempre:
+    // armar el link contra la Route Handler propia (`app/auth/confirm`)
+    // usando `hashed_token` + `verification_type`, no `action_link`.
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+    if (!siteUrl) {
+      return { ok: false, error: "Falta NEXT_PUBLIC_SITE_URL en las env vars — no se puede armar el link de soporte." }
+    }
+    const supportLink = `${siteUrl}/auth/confirm?token_hash=${linkData.properties.hashed_token}&type=${linkData.properties.verification_type}&next=/dashboard`
+
+    return { ok: true, data: { actionLink: supportLink } }
   } catch (err) {
     return {
       ok: false,
