@@ -19,9 +19,17 @@ export function createServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!url || !serviceKey) {
+  // Chequeo separado a propósito (en vez de `if (!url || !serviceKey)` como
+  // antes): así el mensaje de error dice CUÁL de las dos falta, en vez de
+  // obligar a adivinar entre dos variables distintas cada vez que salta.
+  if (!url) {
     throw new Error(
-      "Falta NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY — no se puede crear el cliente service_role.",
+      "Falta NEXT_PUBLIC_SUPABASE_URL en las env vars de este ambiente — no se puede crear el cliente service_role.",
+    )
+  }
+  if (!serviceKey) {
+    throw new Error(
+      "Falta SUPABASE_SERVICE_ROLE_KEY en las env vars de este ambiente — no se puede crear el cliente service_role.",
     )
   }
 
