@@ -33,7 +33,38 @@ export function createServiceClient() {
     )
   }
 
+  // Chequeo extra: decodifica el claim `role` del JWT antes de usarlo. Un
+  // "permission denied for table X" en vez de un error de RLS normal es la
+  // señal típica de que esta key es en realidad la `anon` (o cualquier JWT
+  // que no sea service_role) pegada por error — mismo JWT format, fácil de
+  // confundir copiando del dashboard. Esto lo detecta ACÁ, con un mensaje
+  // claro, en vez de dejar que cada tabla tire su propio permission denied
+  // genérico y haya que adivinar la causa de nuevo cada vez.
+  const role = decodeJwtRole(serviceKey)
+  if (role && role !== "service_role") {
+    throw new Error(
+      `SUPABASE_SERVICE_ROLE_KEY parece tener pegada la key equivocada — el JWT tiene role="${role}", se esperaba "service_role". Volvé a copiarla desde Supabase → Project Settings → API → "service_role" (NO la "anon"/"public").`,
+    )
+  }
+
   return createSupabaseClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
+}
+
+/** Decodifica (sin verificar firma, no hace falta para este chequeo) el claim `role` de un JWT de Supabase. */
+function decodeJwtRole(jwt: string): string | null {
+  try {
+    const payloadSegment = jwt.split(".")[1]
+    if (!payloadSegment) return null
+    const json = Buffer.from(payloadSegment, "base64").toString("utf-8")
+    const payload = JSON.parse(json)
+    return typeof payload.role === "string" ? payload.role : null
+  } catch {
+    // Si no se puede decodificar (key con otro formato, típicamente las
+    // nuevas "publishable"/"secret" keys de Supabase que no son JWT), no
+    // bloqueamos acá — dejamos que el error real de permisos, si lo hay,
+    // salga de la query en sí.
+    return null
+  }
 }
