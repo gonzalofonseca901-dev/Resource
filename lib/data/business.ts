@@ -7,16 +7,41 @@
 
 import type { Business, ModuleDefinition } from "@/lib/types"
 import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/data/session"
 
-/** El negocio del usuario logueado (RLS ya filtra por su business_id). */
+/**
+ * El negocio del usuario logueado.
+ *
+ * BUG REAL encontrado validando Sprint 6 (dejar documentado, mismo criterio
+ * que el checklist de Sprint 5): esta función hacía
+ * `.from("businesses").select("*").single()` SIN `.eq("id", ...)`,
+ * confiando en que RLS siempre iba a devolver exactamente 1 fila (la del
+ * negocio del usuario). Eso era cierto para cualquier usuario normal, pero
+ * dejó de serlo para un agency admin desde la migración 011: la policy
+ * `agency_admin_select_businesses` le da SELECT sobre TODOS los negocios, así
+ * que `.single()` sobre la tabla entera pasó a fallar con
+ * "Cannot coerce the result to a single JSON object" apenas el usuario
+ * logueado tuvo `is_agency_admin = true` — no es un bug de la migración 011
+ * en sí, es esta función asumiendo que RLS iba a hacer un trabajo de scoping
+ * que en realidad nunca le pedía explícitamente. Fix: filtrar por
+ * `business_id` a mano, igual que ya hacen el resto de los fetchers del
+ * repo — no depender de que la ausencia de un `.eq()` "da lo mismo" porque
+ * RLS lo resuelve.
+ */
 export async function getBusiness(): Promise<Business> {
   const supabase = await createClient()
+  const currentUser = await getCurrentUser()
+
+  if (!currentUser) {
+    throw new Error("No se pudo cargar el negocio: no hay sesión activa.")
+  }
 
   const [{ data: business, error }, { data: policy }] = await Promise.all([
-    supabase.from("businesses").select("*").single(),
+    supabase.from("businesses").select("*").eq("id", currentUser.businessId).single(),
     supabase
       .from("cancellation_policies")
       .select("*")
+      .eq("business_id", currentUser.businessId)
       .eq("is_default", true)
       .maybeSingle(),
   ])
