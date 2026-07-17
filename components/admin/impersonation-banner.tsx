@@ -9,12 +9,15 @@ interface ImpersonationBannerProps {
   targetBusinessName: string
 }
 
-// Nota de diseño (ver lib/actions/admin.ts): la impersonación se abre en una
-// pestaña nueva a propósito, así el admin no pierde su propia sesión en la
-// pestaña original. "Volver a mi cuenta" acá no puede "restaurar" la sesión
-// de admin en ESTA pestaña (es una sesión de auth distinta, ya logueada como
-// el usuario target) — lo que hace es cerrar la sesión de soporte y mandar a
-// /login, dejando la pestaña original del admin intacta como estaba.
+// Nota de diseño (ver components/admin/business-detail-panel.tsx): el link
+// de soporte se pensó para abrirse en una ventana de INCÓGNITO, no en una
+// pestaña nueva del mismo navegador — las pestañas comparten cookies, así
+// que solo incógnito aísla de verdad la sesión de soporte de la sesión de
+// admin. "Volver a mi cuenta" acá no puede "restaurar" la sesión de admin
+// en ESTA ventana (es una sesión de auth distinta, ya logueada como el
+// usuario target) — lo que hace es cerrar la sesión de soporte y mandar a
+// /login. La ventana de admin original (fuera de incógnito) queda intacta
+// porque nunca compartió cookies con esta.
 export function ImpersonationBanner({ sessionId, targetBusinessName }: ImpersonationBannerProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()

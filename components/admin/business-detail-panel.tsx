@@ -23,6 +23,8 @@ export function BusinessDetailPanel({ business, plans, moduleCatalog }: Business
   const [planError, setPlanError] = useState<string | null>(null)
   const [impersonateError, setImpersonateError] = useState<string | null>(null)
   const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null)
+  const [impersonationLink, setImpersonationLink] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
   const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set(business.enabledModuleKeys))
   const [moduleError, setModuleError] = useState<string | null>(null)
   const [togglingModuleKey, setTogglingModuleKey] = useState<string | null>(null)
@@ -68,34 +70,35 @@ export function BusinessDetailPanel({ business, plans, moduleCatalog }: Business
   function handleImpersonate(userId: string) {
     setImpersonateError(null)
     setImpersonatingUserId(userId)
+    setImpersonationLink(null)
 
-    // Abrir la pestaña ACÁ, síncrono, como resultado directo del click —
-    // no después del await del Server Action. Si se abre recién cuando
-    // llega la respuesta, el navegador ya no lo considera un popup
-    // "pedido por el usuario" y lo bloquea en silencio (sin tirar error,
-    // por eso no se notaba nada raro: la pestaña simplemente no aparecía y
-    // quedabas viendo tu propia sesión). Se abre en blanco y se redirige
-    // recién cuando tenemos el link real.
-    const supportTab = window.open("", "_blank", "noopener,noreferrer")
-    if (!supportTab) {
-      setImpersonatingUserId(null)
-      setImpersonateError(
-        "El navegador bloqueó la pestaña nueva. Permití pop-ups para este sitio (ícono en la barra de direcciones) e intentá de nuevo.",
-      )
-      return
-    }
-    supportTab.document.write("Generando acceso de soporte...")
-
+    // Ya no se intenta abrir la pestaña con window.open(): además de que
+    // los navegadores lo bloquean si no es resultado 100% síncrono del
+    // click (mala UX pedirle a un usuario no técnico que vaya a habilitar
+    // pop-ups a mano), hay un problema más de fondo — las pestañas del
+    // mismo navegador COMPARTEN cookies. Aunque el popup se abra bien, esa
+    // sesión de soporte termina pisando la cookie de la pestaña de admin
+    // también, no son sesiones aisladas por el solo hecho de estar en
+    // pestañas distintas. La solución real es una ventana de incógnito
+    // (cookie jar separado de verdad) — por eso acá mostramos el link para
+    // copiar, con esa instrucción, en vez de intentar automatizarlo.
     startTransition(async () => {
       const result = await startImpersonationAction(userId, business.id, "Soporte desde el panel de agencia.")
       setImpersonatingUserId(null)
       if (!result.ok) {
         setImpersonateError(result.error)
-        supportTab.close()
         return
       }
-      supportTab.location.href = result.data.actionLink
+      setImpersonationLink(result.data.actionLink)
     })
+  }
+
+  function handleCopyLink() {
+    if (!impersonationLink) return
+    navigator.clipboard.writeText(impersonationLink).then(
+      () => setLinkCopied(true),
+      () => setImpersonateError("No se pudo copiar el link automáticamente — seleccionalo y copialo a mano."),
+    )
   }
 
   return (
@@ -213,6 +216,35 @@ export function BusinessDetailPanel({ business, plans, moduleCatalog }: Business
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {impersonateError && <p className="text-xs text-destructive">{impersonateError}</p>}
+          {impersonationLink && (
+            <div className="flex flex-col gap-2 rounded-md border border-status-pending/40 bg-status-pending/10 p-3 text-sm">
+              <p>
+                Listo. Para no pisar tu propia sesión de admin, abrí este link en una{" "}
+                <strong>ventana de incógnito</strong> (Ctrl/Cmd+Shift+N) — ahí sí queda
+                completamente separado de esta pestaña.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={impersonationLink}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setLinkCopied(false)
+                    handleCopyLink()
+                  }}
+                >
+                  {linkCopied ? "Copiado ✓" : "Copiar link"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                El link expira en 1 hora o al usarlo una vez, lo que pase primero.
+              </p>
+            </div>
+          )}
           {business.users.map((u) => (
             <div
               key={u.id}
