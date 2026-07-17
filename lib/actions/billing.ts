@@ -54,8 +54,15 @@ export async function startSubscriptionCheckoutAction(
       payerEmail: business.email,
       amount: Number(plan.price),
       currencyId: plan.currency,
-      frequency: 1,
-      frequencyType: plan.billing_frequency === "yearly" ? "months" : "months",
+      // BUG REAL encontrado y corregido: antes esto siempre mandaba
+      // frequency=1 + frequencyType="months" aunque el plan fuera anual —
+      // un plan `yearly` terminaba facturándose todos los meses igual que
+      // uno `monthly`, por el mismo monto. Nadie lo notó porque hasta ahora
+      // ningún plan seedeado era anual. Mercado Pago no tiene un
+      // "frequency_type: years" — un plan anual se modela como
+      // frequency=12, frequency_type="months".
+      frequency: plan.billing_frequency === "yearly" ? 12 : 1,
+      frequencyType: "months",
       externalReference: business.id,
       backUrl: `${siteUrl}/facturacion`,
     })

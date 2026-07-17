@@ -5,7 +5,15 @@
 // probable es que is_agency_admin() esté en false para ese usuario, no un
 // problema de este archivo.
 
-import type { AdminBusinessDetail, AdminBusinessListItem, AdminBusinessUser, ImpersonationSession, Plan } from "@/lib/types"
+import type {
+  AdminAuditLogEntry,
+  AdminBusinessDetail,
+  AdminBusinessListItem,
+  AdminBusinessUser,
+  ImpersonationSession,
+  Plan,
+  Role,
+} from "@/lib/types"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 
@@ -174,4 +182,92 @@ export async function getAllPlansForAdmin(): Promise<Plan[]> {
     isActive: p.is_active,
     moduleKeys: (p.plan_modules ?? []).map((m: { module_key: string }) => m.module_key),
   }))
+}
+
+/**
+ * Roles de un negocio AJENO, para el selector del form de invitar usuario
+ * desde el panel de agencia. `getRoles()` (lib/data/users.ts) usa el cliente
+ * normal, que solo ve los roles del propio negocio del caller — la policy
+ * de la 011 no incluye `roles` entre las excepciones cross-tenant (a
+ * propósito, para no ampliar el alcance de esa migración más de lo que
+ * hacía falta en su momento). Acá se resuelve con service_role, scopeado
+ * por el `businessId` que ya viene resuelto server-side desde la página
+ * (no es un valor que controle el cliente de forma insegura).
+ */
+export async function getRolesForAdmin(businessId: string): Promise<Role[]> {
+  const admin = createServiceClient()
+
+  const [{ data: roles, error: rolesError }, { data: rolePerms, error: permsError }] = await Promise.all([
+    admin.from("roles").select("id, business_id, key, name").eq("business_id", businessId),
+    admin
+      .from("role_permissions")
+      .select("role_id, permission_key, roles!inner(business_id)")
+      .eq("roles.business_id", businessId),
+  ])
+
+  if (rolesError) throw new Error(`No se pudieron cargar los roles: ${rolesError.message}`)
+  if (permsError) throw new Error(`No se pudieron cargar los permisos: ${permsError.message}`)
+
+  const permsByRole = new Map<string, string[]>()
+  for (const rp of rolePerms ?? []) {
+    const list = permsByRole.get(rp.role_id) ?? []
+    list.push(rp.permission_key)
+    permsByRole.set(rp.role_id, list)
+  }
+
+  return (roles ?? []).map((r) => ({
+    id: r.id,
+    businessId: r.business_id,
+    key: r.key,
+    name: r.name,
+    permissions: permsByRole.get(r.id) ?? [],
+  }))
+}
+
+/**
+ * Audit log cross-tenant (Parte C del context pack: "reusa audit_log ya
+ * existente pero sin el filtro de business_id, gracias a la excepción de
+ * RLS de la Parte B"). Corre con el cliente normal del admin — la policy
+ * `agency_admin_select_audit_log` (011) ya lo permite, no hace falta
+ * service_role acá.
+ *
+ * OJO: no tenemos en este chat el archivo real de la migración 001/007 que
+ * define `audit_log` (no vino en el zip, según el context pack vive en
+ * Supabase). Se hace `select("*")` a propósito, sin asumir nombres de
+ * columna específicos más allá de `created_at` y `business_id` (usados en
+ * TODAS las demás tablas del proyecto, alta confianza de que también están
+ * acá) — así, si algún nombre de columna que se muestra en la UI no
+ * coincide con el real, se degrada mostrando el registro crudo en vez de
+ * romper la query entera con un "column does not exist".
+ */
+export async function getCrossTenantAuditLog(limit = 200): Promise<AdminAuditLogEntry[]> {
+  const supabase = await createClient()
+
+  const { data: rows, error } = await supabase
+    .from("audit_log")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) throw new Error(`No se pudo cargar el audit log: ${error.message}`)
+  if (!rows || rows.length === 0) return []
+
+  const businessIds = Array.from(
+    new Set(rows.map((r) => (r as Record<string, unknown>).business_id).filter(Boolean)),
+  ) as string[]
+
+  const businessNameById = new Map<string, string>()
+  if (businessIds.length > 0) {
+    const { data: businesses } = await supabase.from("businesses").select("id, name").in("id", businessIds)
+    for (const b of businesses ?? []) businessNameById.set(b.id, b.name)
+  }
+
+  return rows.map((r) => {
+    const row = r as Record<string, unknown>
+    const businessId = row.business_id as string | undefined
+    return {
+      raw: row,
+      businessName: businessId ? (businessNameById.get(businessId) ?? businessId) : null,
+    }
+  })
 }

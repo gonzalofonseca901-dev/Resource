@@ -25,6 +25,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               <Link href="/planes" className="hover:text-foreground">
                 Planes
               </Link>
+              <Link href="/auditoria" className="hover:text-foreground">
+                Auditoría
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">

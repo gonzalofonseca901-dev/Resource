@@ -123,7 +123,15 @@ async function handlePreapprovalEvent(admin: ReturnType<typeof createServiceClie
   const nextStatus = mapPreapprovalStatus(preapproval.status)
   const now = new Date()
   const periodEnd = new Date(now)
-  periodEnd.setMonth(periodEnd.getMonth() + 1) // frequency mensual fija por ahora (ver mercadopago.ts)
+  // BUG REAL corregido junto con lib/actions/billing.ts: antes sumaba 1 mes
+  // fijo sin importar la frecuencia real del plan. Un plan anual
+  // (frequency=12) recién iba a "vencer" localmente al mes, aunque
+  // Mercado Pago solo fuera a cobrar de nuevo a los 12. Se usa
+  // `preapproval.auto_recurring` (lo que MP confirma que quedó configurado)
+  // en vez de volver a mirar `plans.billing_frequency` acá — es la fuente
+  // de verdad más directa en el momento del webhook.
+  const frequencyMonths = preapproval.auto_recurring?.frequency ?? 1
+  periodEnd.setMonth(periodEnd.getMonth() + frequencyMonths)
 
   await admin
     .from("subscriptions")

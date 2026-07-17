@@ -2,11 +2,17 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { AdminBusinessDetail, ModuleDefinition, Plan } from "@/lib/types"
-import { changeBusinessPlanAction, startImpersonationAction, toggleBusinessModuleAction } from "@/lib/actions/admin"
+import type { AdminBusinessDetail, ModuleDefinition, Plan, Role } from "@/lib/types"
+import {
+  changeBusinessPlanAction,
+  inviteUserToBusinessAction,
+  startImpersonationAction,
+  toggleBusinessModuleAction,
+} from "@/lib/actions/admin"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 
@@ -14,9 +20,10 @@ interface BusinessDetailPanelProps {
   business: AdminBusinessDetail
   plans: Plan[]
   moduleCatalog: ModuleDefinition[]
+  roles: Role[]
 }
 
-export function BusinessDetailPanel({ business, plans, moduleCatalog }: BusinessDetailPanelProps) {
+export function BusinessDetailPanel({ business, plans, moduleCatalog, roles }: BusinessDetailPanelProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [selectedPlanId, setSelectedPlanId] = useState(business.subscription?.planId ?? plans[0]?.id ?? "")
@@ -25,6 +32,12 @@ export function BusinessDetailPanel({ business, plans, moduleCatalog }: Business
   const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null)
   const [impersonationLink, setImpersonationLink] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteFullName, setInviteFullName] = useState("")
+  const [inviteRoleId, setInviteRoleId] = useState(roles[0]?.id ?? "")
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [inviteSuccess, setInviteSuccess] = useState(false)
+  const [isInviting, startInviteTransition] = useTransition()
   const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set(business.enabledModuleKeys))
   const [moduleError, setModuleError] = useState<string | null>(null)
   const [togglingModuleKey, setTogglingModuleKey] = useState<string | null>(null)
@@ -99,6 +112,34 @@ export function BusinessDetailPanel({ business, plans, moduleCatalog }: Business
       () => setLinkCopied(true),
       () => setImpersonateError("No se pudo copiar el link automáticamente — seleccionalo y copialo a mano."),
     )
+  }
+
+  function handleInvite(e: React.FormEvent) {
+    e.preventDefault()
+    setInviteError(null)
+    setInviteSuccess(false)
+
+    if (!inviteEmail || !inviteFullName || !inviteRoleId) {
+      setInviteError("Completá email, nombre y rol.")
+      return
+    }
+
+    startInviteTransition(async () => {
+      const result = await inviteUserToBusinessAction({
+        businessId: business.id,
+        email: inviteEmail,
+        fullName: inviteFullName,
+        roleId: inviteRoleId,
+      })
+      if (!result.ok) {
+        setInviteError(result.error)
+        return
+      }
+      setInviteSuccess(true)
+      setInviteEmail("")
+      setInviteFullName("")
+      router.refresh()
+    })
   }
 
   return (
@@ -271,6 +312,36 @@ export function BusinessDetailPanel({ business, plans, moduleCatalog }: Business
           {business.users.length === 0 && (
             <p className="text-sm text-muted-foreground">Este negocio no tiene usuarios cargados.</p>
           )}
+
+          <form onSubmit={handleInvite} className="flex flex-col gap-2 border-t border-border pt-3">
+            <span className="text-xs font-medium text-muted-foreground">Invitar usuario a este negocio</span>
+            <div className="grid grid-cols-3 gap-2">
+              <Input
+                placeholder="Nombre completo"
+                value={inviteFullName}
+                onChange={(e) => setInviteFullName(e.target.value)}
+              />
+              <Input
+                type="email"
+                placeholder="Email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+              <Select value={inviteRoleId} onChange={(e) => setInviteRoleId(e.target.value)}>
+                {roles.length === 0 && <option value="">Sin roles cargados</option>}
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {inviteError && <p className="text-xs text-destructive">{inviteError}</p>}
+            {inviteSuccess && <p className="text-xs text-status-confirmed">Invitación enviada.</p>}
+            <Button type="submit" size="sm" disabled={isInviting || roles.length === 0} className="self-start">
+              {isInviting ? "Invitando..." : "Invitar"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

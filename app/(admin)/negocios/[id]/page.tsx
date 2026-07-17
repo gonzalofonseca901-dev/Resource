@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { getBusinessAdminDetail, getActivePlans, getModuleCatalog } from "@/lib/data"
+import { getBusinessAdminDetail, getActivePlans, getModuleCatalog, getRolesForAdmin } from "@/lib/data"
 import { BusinessDetailPanel } from "@/components/admin/business-detail-panel"
 
 export default async function AdminBusinessDetailPage({
@@ -16,5 +16,7 @@ export default async function AdminBusinessDetailPage({
 
   if (!business) notFound()
 
-  return <BusinessDetailPanel business={business} plans={plans} moduleCatalog={moduleCatalog} />
+  const roles = await getRolesForAdmin(business.id)
+
+  return <BusinessDetailPanel business={business} plans={plans} moduleCatalog={moduleCatalog} roles={roles} />
 }

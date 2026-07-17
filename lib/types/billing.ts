@@ -75,3 +75,11 @@ export interface ImpersonationSession {
   expiresAt: string
   endedAt: string | null
 }
+
+// Ver lib/data/admin.ts (getCrossTenantAuditLog) — no tenemos el schema real
+// de audit_log en este chat, por eso `raw` queda genérico en vez de
+// tipar cada columna.
+export interface AdminAuditLogEntry {
+  raw: Record<string, unknown>
+  businessName: string | null
+}
