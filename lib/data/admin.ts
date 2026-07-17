@@ -5,7 +5,7 @@
 // probable es que is_agency_admin() esté en false para ese usuario, no un
 // problema de este archivo.
 
-import type { AdminBusinessDetail, AdminBusinessListItem, AdminBusinessUser, ImpersonationSession } from "@/lib/types"
+import type { AdminBusinessDetail, AdminBusinessListItem, AdminBusinessUser, ImpersonationSession, Plan } from "@/lib/types"
 import { createClient } from "@/lib/supabase/server"
 import { createServiceClient } from "@/lib/supabase/service"
 
@@ -150,4 +150,28 @@ export async function getActiveImpersonationForUser(userId: string): Promise<Imp
     expiresAt: data.expires_at,
     endedAt: data.ended_at,
   }
+}
+
+/** Todos los planes (incluidos inactivos) para la pantalla de gestión de planes del panel de agencia. */
+export async function getAllPlansForAdmin(): Promise<Plan[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from("plans")
+    .select("id, key, name, description, price, currency, billing_frequency, is_active, plan_modules(module_key)")
+    .order("sort_order")
+
+  if (error) throw new Error(`No se pudieron cargar los planes: ${error.message}`)
+
+  return (data ?? []).map((p) => ({
+    id: p.id,
+    key: p.key,
+    name: p.name,
+    description: p.description ?? "",
+    price: Number(p.price),
+    currency: p.currency,
+    billingFrequency: p.billing_frequency,
+    isActive: p.is_active,
+    moduleKeys: (p.plan_modules ?? []).map((m: { module_key: string }) => m.module_key),
+  }))
 }

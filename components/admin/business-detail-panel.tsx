@@ -2,25 +2,56 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { AdminBusinessDetail, Plan } from "@/lib/types"
-import { changeBusinessPlanAction, startImpersonationAction } from "@/lib/actions/admin"
+import type { AdminBusinessDetail, ModuleDefinition, Plan } from "@/lib/types"
+import { changeBusinessPlanAction, startImpersonationAction, toggleBusinessModuleAction } from "@/lib/actions/admin"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 
 interface BusinessDetailPanelProps {
   business: AdminBusinessDetail
   plans: Plan[]
+  moduleCatalog: ModuleDefinition[]
 }
 
-export function BusinessDetailPanel({ business, plans }: BusinessDetailPanelProps) {
+export function BusinessDetailPanel({ business, plans, moduleCatalog }: BusinessDetailPanelProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [selectedPlanId, setSelectedPlanId] = useState(business.subscription?.planId ?? plans[0]?.id ?? "")
   const [planError, setPlanError] = useState<string | null>(null)
   const [impersonateError, setImpersonateError] = useState<string | null>(null)
   const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null)
+  const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set(business.enabledModuleKeys))
+  const [moduleError, setModuleError] = useState<string | null>(null)
+  const [togglingModuleKey, setTogglingModuleKey] = useState<string | null>(null)
+
+  function handleToggleModule(moduleKey: string, nextEnabled: boolean) {
+    setModuleError(null)
+    setTogglingModuleKey(moduleKey)
+    // Optimista: el catálogo de módulos cambia poco, y si falla lo revertimos abajo.
+    setEnabledModules((prev) => {
+      const next = new Set(prev)
+      if (nextEnabled) next.add(moduleKey)
+      else next.delete(moduleKey)
+      return next
+    })
+    startTransition(async () => {
+      const result = await toggleBusinessModuleAction(business.id, moduleKey, nextEnabled)
+      setTogglingModuleKey(null)
+      if (!result.ok) {
+        setModuleError(result.error)
+        // revertir el optimista
+        setEnabledModules((prev) => {
+          const next = new Set(prev)
+          if (nextEnabled) next.delete(moduleKey)
+          else next.add(moduleKey)
+          return next
+        })
+      }
+    })
+  }
 
   function handleChangePlan() {
     setPlanError(null)
@@ -130,19 +161,32 @@ export function BusinessDetailPanel({ business, plans }: BusinessDetailPanelProp
 
       <Card>
         <CardHeader>
-          <CardTitle>Módulos activos</CardTitle>
+          <CardTitle>Módulos</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {business.enabledModuleKeys.length === 0 && (
-              <span className="text-sm text-muted-foreground">Sin módulos activos.</span>
-            )}
-            {business.enabledModuleKeys.map((key) => (
-              <Badge key={key} tone="muted">
-                {key}
-              </Badge>
-            ))}
-          </div>
+        <CardContent className="flex flex-col gap-2">
+          {moduleError && <p className="text-xs text-destructive">{moduleError}</p>}
+          {moduleCatalog.map((mod) => {
+            const isEnabled = enabledModules.has(mod.key)
+            return (
+              <div
+                key={mod.key}
+                className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
+              >
+                <div className="flex flex-col">
+                  <span className="font-medium">
+                    {mod.name} {mod.required && <Badge tone="muted">Core</Badge>}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{mod.description}</span>
+                </div>
+                <Switch
+                  checked={isEnabled}
+                  onCheckedChange={(next) => handleToggleModule(mod.key, next)}
+                  disabled={mod.required || (isPending && togglingModuleKey === mod.key)}
+                  aria-label={`Activar ${mod.name}`}
+                />
+              </div>
+            )
+          })}
         </CardContent>
       </Card>
 

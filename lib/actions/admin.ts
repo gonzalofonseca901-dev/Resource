@@ -141,7 +141,16 @@ export async function startImpersonationAction(
     .eq("business_id", targetBusinessId)
     .single()
   if (targetUserError || !targetUser) {
-    return { ok: false, error: "No se encontró el usuario target en ese negocio." }
+    // Antes esto devolvía un mensaje genérico fijo — lo cambié a mostrar el
+    // error real de Supabase. Si el problema es la key de service_role (mal
+    // pegada, o efectivamente la anon key) esto va a fallar por RLS
+    // silenciosamente (0 filas, sin un error de permiso explícito) en vez de
+    // un error de auth claro — por eso hace falta ver el mensaje real para
+    // distinguir "no existe la fila" de "no tengo permiso para verla".
+    return {
+      ok: false,
+      error: `No se encontró el usuario target en ese negocio${targetUserError ? ` (detalle: ${targetUserError.message})` : ""}.`,
+    }
   }
 
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1h, ver nota de la migración 013
@@ -181,4 +190,72 @@ export async function endImpersonationAction(sessionId: string): Promise<ActionR
 
   if (error) return { ok: false, error: error.message }
   return { ok: true, data: undefined }
+}
+
+/**
+ * Crea o edita un plan del catálogo (`plans` + `plan_modules`). No toca
+ * negocios existentes con ese plan asignado — `subscriptions.plan_id`
+ * sigue apuntando al mismo plan, solo cambia su definición. Si querés que
+ * los negocios existentes reciban los módulos nuevos del plan editado, hay
+ * que correr `changeBusinessPlanAction` para cada uno (o llamar
+ * `apply_plan_modules` a mano) — este action NO lo hace automático, para no
+ * tocar negocios sin que la agencia lo pida explícitamente.
+ */
+export async function savePlanAction(input: {
+  id?: string // si viene, edita; si no, crea uno nuevo
+  key: string
+  name: string
+  description: string
+  price: number
+  currency: string
+  billingFrequency: "monthly" | "yearly"
+  isActive: boolean
+  moduleKeys: string[]
+}): Promise<ActionResult<{ planId: string }>> {
+  const auth = await requireAgencyAdmin()
+  if (!auth.ok) return { ok: false, error: auth.error }
+
+  const admin = createServiceClient()
+
+  const { data: plan, error: planError } = await admin
+    .from("plans")
+    .upsert(
+      {
+        id: input.id,
+        key: input.key,
+        name: input.name,
+        description: input.description,
+        price: input.price,
+        currency: input.currency,
+        billing_frequency: input.billingFrequency,
+        is_active: input.isActive,
+      },
+      { onConflict: "id" },
+    )
+    .select("id")
+    .single()
+
+  if (planError || !plan) {
+    return { ok: false, error: `No se pudo guardar el plan: ${planError?.message}` }
+  }
+
+  // Reemplaza el mapeo completo de módulos del plan (borra y vuelve a
+  // insertar) en vez de hacer un diff — más simple y este catálogo cambia
+  // con poca frecuencia, no vale la pena optimizar el diff acá.
+  const { error: deleteError } = await admin.from("plan_modules").delete().eq("plan_id", plan.id)
+  if (deleteError) {
+    return { ok: false, error: `El plan se guardó pero no se pudieron actualizar sus módulos: ${deleteError.message}` }
+  }
+
+  if (input.moduleKeys.length > 0) {
+    const { error: insertError } = await admin
+      .from("plan_modules")
+      .insert(input.moduleKeys.map((module_key) => ({ plan_id: plan.id, module_key })))
+    if (insertError) {
+      return { ok: false, error: `El plan se guardó pero no se pudieron cargar los módulos: ${insertError.message}` }
+    }
+  }
+
+  revalidatePath("/planes")
+  return { ok: true, data: { planId: plan.id } }
 }
