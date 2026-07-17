@@ -132,49 +132,57 @@ export async function startImpersonationAction(
   const auth = await requireAgencyAdmin()
   if (!auth.ok) return { ok: false, error: auth.error }
 
-  const admin = createServiceClient()
+  // BUG REAL encontrado validando Sprint 6: sin este try/catch, cualquier
+  // excepción acá adentro (ej. algo puntual de auth.admin.generateLink)
+  // quedaba sin manejar dentro del startTransition del cliente — la pestaña
+  // de soporte se quedaba en about:blank para siempre, sin error visible en
+  // ningún lado. Con esto, cualquier falla vuelve como {ok:false, error}
+  // igual que el resto de las acciones, y el cliente puede cerrar la
+  // pestaña y mostrar el mensaje.
+  try {
+    const admin = createServiceClient()
 
-  const { data: targetUser, error: targetUserError } = await admin
-    .from("users")
-    .select("email")
-    .eq("id", targetUserId)
-    .eq("business_id", targetBusinessId)
-    .single()
-  if (targetUserError || !targetUser) {
-    // Antes esto devolvía un mensaje genérico fijo — lo cambié a mostrar el
-    // error real de Supabase. Si el problema es la key de service_role (mal
-    // pegada, o efectivamente la anon key) esto va a fallar por RLS
-    // silenciosamente (0 filas, sin un error de permiso explícito) en vez de
-    // un error de auth claro — por eso hace falta ver el mensaje real para
-    // distinguir "no existe la fila" de "no tengo permiso para verla".
+    const { data: targetUser, error: targetUserError } = await admin
+      .from("users")
+      .select("email")
+      .eq("id", targetUserId)
+      .eq("business_id", targetBusinessId)
+      .single()
+    if (targetUserError || !targetUser) {
+      return {
+        ok: false,
+        error: `No se encontró el usuario target en ese negocio${targetUserError ? ` (detalle: ${targetUserError.message})` : ""}.`,
+      }
+    }
+
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1h, ver nota de la migración 013
+
+    const { error: auditError } = await admin.from("impersonation_sessions").insert({
+      admin_id: auth.user.id,
+      target_user_id: targetUserId,
+      target_business_id: targetBusinessId,
+      reason: reason ?? null,
+      expires_at: expiresAt,
+    })
+    if (auditError) {
+      return { ok: false, error: `No se pudo registrar la sesión de soporte: ${auditError.message}. Cancelado por seguridad.` }
+    }
+
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email: targetUser.email,
+    })
+    if (linkError || !linkData) {
+      return { ok: false, error: `No se pudo generar el acceso: ${linkError?.message ?? "sin detalle"}` }
+    }
+
+    return { ok: true, data: { actionLink: linkData.properties.action_link } }
+  } catch (err) {
     return {
       ok: false,
-      error: `No se encontró el usuario target en ese negocio${targetUserError ? ` (detalle: ${targetUserError.message})` : ""}.`,
+      error: `Error inesperado generando la impersonación: ${err instanceof Error ? err.message : String(err)}`,
     }
   }
-
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1h, ver nota de la migración 013
-
-  const { error: auditError } = await admin.from("impersonation_sessions").insert({
-    admin_id: auth.user.id,
-    target_user_id: targetUserId,
-    target_business_id: targetBusinessId,
-    reason: reason ?? null,
-    expires_at: expiresAt,
-  })
-  if (auditError) {
-    return { ok: false, error: `No se pudo registrar la sesión de soporte: ${auditError.message}. Cancelado por seguridad.` }
-  }
-
-  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-    type: "magiclink",
-    email: targetUser.email,
-  })
-  if (linkError || !linkData) {
-    return { ok: false, error: `No se pudo generar el acceso: ${linkError?.message}` }
-  }
-
-  return { ok: true, data: { actionLink: linkData.properties.action_link } }
 }
 
 export async function endImpersonationAction(sessionId: string): Promise<ActionResult> {
