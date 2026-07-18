@@ -8,6 +8,7 @@ import {
   cheapestPrice,
 } from "@/lib/data/public"
 import { getPublicTheme } from "@/lib/public-theme"
+import { publicHref } from "@/lib/public-links"
 
 const HERO_COPY: Record<string, { eyebrow: string; verb: string }> = {
   court: { eyebrow: "Reservá tu cancha", verb: "Elegí día, horario y listo" },
@@ -37,6 +38,8 @@ export default async function PublicLandingPage({ params }: { params: Promise<{ 
     }),
   )
 
+  const reservarHref = await publicHref(slug, "reservar")
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-16 px-6 py-16 sm:px-10">
       {/* Hero */}
@@ -52,7 +55,7 @@ export default async function PublicLandingPage({ params }: { params: Promise<{ 
         <p className="max-w-xl text-lg opacity-80">{hero.verb}.</p>
         <div>
           <Link
-            href="/reservar"
+            href={reservarHref}
             className={`${theme.buttonClass} inline-flex items-center px-6 py-3 text-sm`}
             style={{ backgroundColor: "var(--accent)", color: "#fff" }}
           >
